@@ -4,7 +4,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, push, onValue, get, set, remove, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, ShieldCheck, Bell, Activity, AlertTriangle, Trash2, Eye, Camera, Printer, Lock, Send, IdCard, EyeOff, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, X, Calculator, TrendingUp, TrendingDown, ClipboardList, Globe, Edit2, UserPlus, ShieldAlert, Unlock } from "lucide-react";
+import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Eye, Camera, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, X, Calculator, TrendingUp, TrendingDown, ClipboardList, Globe, Edit2, UserPlus, ShieldAlert, Unlock, ChevronDown } from "lucide-react";
 
 // ============================================================================
 // CONFIGURACIÓN DE FIREBASE (CANINDEYÚ)
@@ -31,9 +31,22 @@ const DISTRITOS_CANINDEYU = [
 ];
 const NOMBRE_DEPARTAMENTO = "CANINDEYÚ";
 
+// --- DICCIONARIO DE FOTOS LOCALES ---
+// Mapeo exacto entre el nombre en el sistema y el nombre del archivo de la foto (.jpg)
+const FOTOS_LOCALES_CONCEJALES = {
+  "1-FABIO PORTILLO": "/fotos/1-fabio_portillo.jpg",
+  "2- JULIO CABRERA": "/fotos/2- julio_cabrera.jpg",
+  "3- JOEL VILLASANTI": "/fotos/3-joel_villasanti.jpg",
+  "4-ELENO VERON": "/fotos/4-eleno_verón.jpg",
+  "5- GLADYS SANTANDER": "/fotos/5-gladys_santander.jpg",
+  "6- EDGAR MONZON": "/fotos/6-edgar_verón.jpg",
+  "7- MARCELINO GONZALEZ": "/fotos/7-marcelino_gonzález.jpg",
+  "8- ISMAEL FERNANDEZ": "/fotos/8-ismael_fernández.jpg",
+  "9- LUZ MABEL R.": "/fotos/9-luz_mabel_r.jpg" 
+};
 // --- HERRAMIENTAS GLOBALES ---
-const generarLlave = (distrito, mesa, orden) => `${distrito}_${mesa}_${orden}`.toUpperCase().replace(/[\.\$#\[\]\/]/g, '').trim();
-const generarLlaveMesa = (distrito, mesa) => `${distrito}_${mesa}`.toUpperCase().replace(/[\.\$#\[\]\/]/g, '').trim();
+const generarLlave = (distrito, mesa, orden) => `${distrito}_${mesa}_${orden}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
+const generarLlaveMesa = (distrito, mesa) => `${distrito}_${mesa}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
 
 const enviarWhatsAppCarnet = (v) => {
     if (!v.telefono) return alert("Este votante no tiene número de teléfono registrado.");
@@ -155,8 +168,11 @@ export default function BemoSystem() {
   if (rol === 'pendiente') return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center"><ShieldAlert size={64} className="text-yellow-500 mb-4" /><h1 className="text-2xl font-black mb-2">CUENTA EN REVISIÓN</h1><p className="text-gray-400 mb-8 max-w-sm">Avisa a tu Administrador Local para que active tu acceso.</p><button onClick={()=>signOut(auth)} className="bg-red-600 px-6 py-3 rounded-xl font-bold">CERRAR SESIÓN</button></div>);
   if (rol === 'veedor') return <AppVeedor padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} />;
   if (rol === 'concejal') return <AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} />;
-  if (rol === 'dirigente') return <AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} configApp={configApp} auth={auth} />;
-  if (rol === 'super_admin' || rol === 'master_departamental') return <AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo} />;
+  
+  // AQUI SE PASA LA DB CORRECTAMENTE AL DIRIGENTE
+  if (rol === 'dirigente') return <AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} configApp={configApp} auth={auth} db={db} />;
+  
+  if (rol === 'super_admin' || rol === 'master_departamental') return <AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo}  />;
 
   return <div className="min-h-screen flex items-center justify-center"><button onClick={()=>signOut(auth)} className="bg-red-500 text-white p-4 rounded font-bold">ROL NO RECONOCIDO - CERRAR SESIÓN</button></div>;
 }
@@ -246,7 +262,7 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
     const [tInt, setTInt] = useState(""); const [tLis, setTList] = useState(""); const [tMet, setTMeta] = useState(""); const [nConc, setNConc] = useState("");
     const [idxEd, setIdxEd] = useState(null); const [valEd, setValEd] = useState(""); const [subiendo, setSubiendo] = useState(null);
 
-    useEffect(() => { setTInt(configActual.intendente); setTList(configActual.lista); setTMeta(configActual.meta_concejales); setIdxEd(null); }, [distritoGlobal, configuracionDepartamental]);
+    useEffect(() => { setTInt(configActual.intendente); setTList(configActual.lista); setTMeta(configActual.meta_concejales); setIdxEd(null); }, [distritoGlobal, configuracionDepartamental]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const guardarDistrito = () => { set(ref(db, `configuracion/${distritoGlobal}`), { ...dataBruta, intendente: tInt.toUpperCase() || "NO CONFIGURADO", lista: tLis, meta_concejales: parseInt(tMet) || 500, concejales: configActual.concejales }); alert(`✅ Guardado.`); };
     const subirFoto = async (e, n) => { const f = e.target.files[0]; if(!f) return; setSubiendo(n); try { const r = storageRef(storage, `fotos/${n.replace(/[^a-zA-Z0-9]/g, '_')}`); await uploadBytes(r, f); await set(ref(db, `concejales_fotos/${n}`), await getDownloadURL(r)); alert("✅ Foto lista."); } catch(err) { alert(err.message); } setSubiendo(null); };
@@ -267,6 +283,7 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
 // ==============================================================================================
 // 3. APPS POR ROL (VEEDOR, CONCEJAL, DIRIGENTE)
 // ==============================================================================================
+
 function AppVeedor({ padronGlobal, yaVotaronGlobal, mesasCerradas, asignacionesVeedores, escrutinioGlobal, configApp, auth, db }) {
     const [vs, setVs] = useState(null); const [ciIn, setCiIn] = useState(""); const [fMesa, setFMesa] = useState(""); const [fEsc, setFEsc] = useState({ intendente: "", concejales: {} }); const [mEdEsc, setMEdEsc] = useState(false);
     useEffect(() => { const g = localStorage.getItem('veedor_bemo_sesion'); if (g) { const p = JSON.parse(g); setVs(p); set(ref(db, `dia_d/veedores_online/${p.ci}`), true); } }, [db]);
@@ -294,27 +311,140 @@ function AppVeedor({ padronGlobal, yaVotaronGlobal, mesasCerradas, asignacionesV
     );
 }
 
-function AppDirigente({ padronGlobal, yaVotaronGlobal, pasoPCGlobal, configApp, auth }) {
-    const [b, setB] = useState(""); const [res, setRes] = useState(null);
+function AppDirigente({ padronGlobal, yaVotaronGlobal, pasoPCGlobal, configApp, auth, db }) {
+    const [b, setB] = useState(""); 
+    const [res, setRes] = useState(null);
+
+    const marcarPasoPC = (llave, pcData) => {
+        if (pcData) {
+            remove(ref(db, `dia_d/paso_pc_checkins/${llave}`));
+            setRes({...res, pc: null});
+        } else {
+            const newData = { 
+                hora: new Date().toLocaleTimeString(), 
+                timestamp: Date.now(),
+                registradoPorNombre: auth.currentUser?.email || "DIRIGENTE" 
+            };
+            set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData);
+            setRes({...res, pc: newData});
+        }
+    };
+
     return (
         <div className="bg-slate-50 min-h-screen pb-20">
             <header className="bg-green-800 text-white p-4 flex justify-between items-center shadow-xl border-b-4 border-green-500"><div className="flex items-center gap-3"><span className="bg-green-600 px-2 rounded font-black">BEMO</span><div><h1 className="text-sm font-bold uppercase">DIRIGENTE BASE</h1></div></div><button onClick={()=>signOut(auth)} className="bg-green-900 p-2 rounded-full"><LogOut size={16}/></button></header>
-            <main className="max-w-2xl mx-auto p-4 mt-10"><div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-t-green-500"><h2 className="font-black text-xl mb-4 text-slate-800"><Search className="inline text-green-600 mr-2"/>CONSULTA DÍA D</h2><div className="flex gap-2 mb-6"><input type="number" placeholder="N° Cédula..." className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={b} onChange={e=>setB(e.target.value)} /><button onClick={()=>{const p=padronGlobal[b]; if(p)setRes({...p, v:yaVotaronGlobal[generarLlave(p.distrito,p.mesa,p.orden)], pc:pasoPCGlobal[generarLlave(p.distrito,p.mesa,p.orden)]}); else setRes("NO");}} className="bg-green-600 text-white px-6 rounded-xl font-bold"><Search/></button></div>{res==="NO" && <div className="p-4 bg-red-50 text-red-600 font-bold text-center rounded-xl">No encontrada.</div>}{res && res!=="NO" && (<div className="border-2 border-slate-200 rounded-xl p-6"><div className="text-2xl font-black">{res.nombre} {res.apellido}</div><div className="text-sm font-bold text-gray-500 mb-6">C.I: {b} | {res.distrito}</div><div className="grid grid-cols-2 gap-4 mb-6"><div className="bg-slate-50 border p-3 rounded-lg text-center"><div className="text-[10px] font-bold text-gray-500">MESA</div><div className="text-2xl font-black">{res.mesa}</div></div><div className="bg-slate-50 border p-3 rounded-lg text-center"><div className="text-[10px] font-bold text-gray-500">ORDEN</div><div className="text-2xl font-black">{res.orden}</div></div></div><div className="mt-4 border-t pt-4">{res.pc ? <div className="bg-green-50 text-green-800 p-3 rounded-xl text-center font-bold">✅ PASÓ PC</div> : <div className="bg-gray-50 text-gray-500 p-3 rounded-xl text-center font-bold">AÚN NO PASÓ PC</div>}</div>{res.v ? <div className="bg-green-100 text-green-800 p-4 rounded-xl text-center font-black text-xl mt-4">✅ YA VOTÓ ({res.v.hora})</div> : <div className="bg-gray-100 text-gray-500 p-4 rounded-xl text-center font-black text-xl mt-4">⏳ PENDIENTE</div>}</div>)}</div></main>
+            <main className="max-w-2xl mx-auto p-4 mt-10"><div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-t-green-500"><h2 className="font-black text-xl mb-4 text-slate-800"><Search className="inline text-green-600 mr-2"/>CONSULTA DÍA D</h2><div className="flex gap-2 mb-6"><input type="number" placeholder="N° Cédula..." className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={b} onChange={e=>setB(e.target.value)} /><button onClick={()=>{const p=padronGlobal[b]; if(p)setRes({...p, v:yaVotaronGlobal[generarLlave(p.distrito,p.mesa,p.orden)], pc:pasoPCGlobal[generarLlave(p.distrito,p.mesa,p.orden)]}); else setRes("NO");}} className="bg-green-600 text-white px-6 rounded-xl font-bold"><Search/></button></div>{res==="NO" && <div className="p-4 bg-red-50 text-red-600 font-bold text-center rounded-xl">No encontrada.</div>}{res && res!=="NO" && (<div className="border-2 border-slate-200 rounded-xl p-6"><div className="text-2xl font-black">{res.nombre} {res.apellido}</div><div className="text-sm font-bold text-gray-500 mb-6">C.I: {b} | {res.distrito}</div><div className="grid grid-cols-2 gap-4 mb-6"><div className="bg-slate-50 border p-3 rounded-lg text-center"><div className="text-[10px] font-bold text-gray-500">MESA</div><div className="text-2xl font-black">{res.mesa}</div></div><div className="bg-slate-50 border p-3 rounded-lg text-center"><div className="text-[10px] font-bold text-gray-500">ORDEN</div><div className="text-2xl font-black">{res.orden}</div></div></div><div className="mt-4 border-t pt-4">
+                <button onClick={() => marcarPasoPC(generarLlave(res.distrito, res.mesa, res.orden), res.pc)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${res.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
+                    {res.pc ? <>📍 YA PASÓ POR PC ({res.pc.hora})</> : <>⏳ MARCAR "PASÓ POR PC"</>}
+                </button>
+            </div>{res.v ? <div className="bg-green-100 text-green-800 p-4 rounded-xl text-center font-black text-xl mt-4">✅ YA VOTÓ ({res.v.hora})</div> : <div className="bg-gray-100 text-gray-500 p-4 rounded-xl text-center font-black text-xl mt-4">⏳ AÚN NO VOTÓ</div>}</div>)}</div></main>
         </div>
     );
 }
 
 function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo }) {
-    const [tab, setTab] = useState("registro"); const [bNom, setBNom] = useState(""); const [resNom, setResNom] = useState([]); const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, local:"", mesa:"", orden:"", concejal:perfil.nombre_oficial||"", coordinador:"", semaforo:"VERDE" });
-    const miNom = perfil.nombre_oficial||""; const misV = votosSeguros.filter(v=>v.concejal===miNom && v.distrito===perfil.distrito); const [lim, setLim] = useState(50);
-    const mCoor = [...new Set(misV.map(v=>v.coordinador).filter(c=>c))]; const [fC, setFC] = useState("TODOS"); const [fS, setFS] = useState("TODOS"); const [mNC, setMNC] = useState(false);
+    const [tab, setTab] = useState("registro"); 
+    const [menuAbierto, setMenuAbierto] = useState(false);
     
+    // Estados para el Registro
+    const [bNom, setBNom] = useState(""); 
+    const [resNom, setResNom] = useState([]); 
+    const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, local:"", mesa:"", orden:"", concejal:perfil.nombre_oficial||"", coordinador:"", semaforo:"VERDE" });
+    
+    // Estados para Gestión de Dirigentes
+    const [formDirigente, setFormDirigente] = useState({ cedula: "", nombre: "" });
+
+    // Estados para el nuevo Buscador Día D
+    const [bDiaD, setBDiaD] = useState(""); 
+    const [resDiaD, setResDiaD] = useState(null);
+
+    const miNom = perfil.nombre_oficial||""; 
+    const misV = votosSeguros.filter(v=>v.concejal===miNom && v.distrito===perfil.distrito); 
+    const [lim, setLim] = useState(50);
+    const mCoor = [...new Set(misV.map(v=>v.coordinador).filter(c=>c))]; 
+    const [fC, setFC] = useState("TODOS"); 
+    const [fS, setFS] = useState("TODOS"); 
+    const [mNC, setMNC] = useState(false);
+
+    // Lógica para el Feed del Live
+    const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
+    const yaVotaronFiltrados = useMemo(() => {
+        const o = {}; Object.keys(yaVotaronGlobal||{}).forEach(k => { if(k.startsWith(perfil.distrito)) o[k] = yaVotaronGlobal[k]; }); return o;
+    }, [yaVotaronGlobal, perfil.distrito]);
+    const ultimosVotosFeed = useMemo(() => { return Object.entries(yaVotaronFiltrados || {}).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)).slice(0, 12).map(([llave, data]) => ({ llave, data, elector: padronLlaves[llave] })); }, [yaVotaronFiltrados, padronLlaves]);
+    
+    // NUEVA FUNCIÓN: CONCEJAL MARCA PASO PC
+    const marcarPasoPCConcejal = (llave, pcData) => {
+        if (pcData) {
+            remove(ref(db, `dia_d/paso_pc_checkins/${llave}`));
+            setResDiaD({...resDiaD, pc: null});
+        } else {
+            const nombreConcejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom;
+            const newData = { 
+                hora: new Date().toLocaleTimeString(), 
+                timestamp: Date.now(),
+                registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}` 
+            };
+            set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData);
+            setResDiaD({...resDiaD, pc: newData});
+        }
+    };
+
     return (
-        <div className="bg-red-50 min-h-screen pb-20">
-            <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50"><div className="flex items-center gap-3"><span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span><div><h1 className="text-sm font-bold uppercase">{configApp.intendente||"S/D"}</h1><p className="text-[10px] text-red-200 font-bold uppercase">CANDIDATO: {miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito})</p></div></div><button onClick={()=>signOut(auth)} className="bg-red-950 p-2 rounded-full"><LogOut size={16}/></button></header>
-            <div className="bg-white px-4 py-2 flex justify-center gap-4 text-xs font-black border-b shadow-sm sticky top-[68px] z-40"><span className="text-slate-700 bg-slate-100 px-3 py-1 rounded-full">TOT: {misV.length}</span><span className="text-green-700 bg-green-50 px-3 py-1 rounded-full">🟢 {misV.filter(v=>v.semaforo==='VERDE').length}</span></div>
-            <nav className="bg-white flex border-b shadow-sm justify-center overflow-x-auto"><button onClick={()=>setTab("registro")} className={`p-4 font-bold text-xs ${tab==='registro'?'border-b-4 border-red-600 text-red-700':'text-gray-400'}`}>REGISTRO</button><button onClick={()=>setTab("lista")} className={`p-4 font-bold text-xs ${tab==='lista'?'border-b-4 border-red-600 text-red-700':'text-gray-400'}`}>LISTA</button></nav>
-            <main className="max-w-5xl mx-auto p-4 md:p-6 mt-4">
+        <div className="bg-slate-50 min-h-screen pb-20">
+            <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
+                <div className="flex items-center gap-3">
+                    <span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span>
+                    <div>
+                        <h1 className="text-sm font-bold uppercase">{configApp.intendente||"S/D"}</h1>
+                        <p className="text-[10px] text-red-200 font-bold uppercase">CANDIDATO: {miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito})</p>
+                    </div>
+                </div>
+                <button onClick={()=>signOut(auth)} className="bg-red-950 p-2 rounded-full"><LogOut size={16}/></button>
+            </header>
+            
+            <div className="bg-white px-4 py-2 flex justify-center gap-4 text-xs font-black border-b shadow-sm relative z-40">
+                <span className="text-slate-700 bg-slate-100 px-3 py-1 rounded-full">TOT: {misV.length}</span>
+                <span className="text-green-700 bg-green-50 px-3 py-1 rounded-full">🟢 {misV.filter(v=>v.semaforo==='VERDE').length}</span>
+            </div>
+
+            {/* MENÚ REORGANIZADO */}
+            <div className="bg-white flex border-b shadow-sm sticky top-[68px] z-50 print:hidden px-2 items-center justify-center w-full">
+                <div className="flex items-center max-w-full pt-2 pb-2">
+                    
+                    {/* PESTAÑAS PRINCIPALES CENTRADAS */}
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
+                        <button onClick={() => {setTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><CheckCircle size={16}/> REGISTRO</button>
+                        <button onClick={() => {setTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={16}/> LISTA</button>
+                        <button onClick={() => {setTab("dia_d_buscador"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'dia_d_buscador' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Search size={16}/> DÍA D BUSCADOR</button>
+                    </div>
+
+                    {/* MENÚ DESPLEGABLE CON LAS DEMÁS OPCIONES */}
+                    <div className="relative shrink-0 border-l border-slate-200 pl-2">
+                        <button onClick={() => setMenuAbierto(!menuAbierto)} className={`p-2 px-3 font-black text-[11px] flex gap-1 items-center rounded-lg transition-colors ${menuAbierto ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100'}`}>
+                            MÁS OPCIONES <ChevronDown size={14} className={`transition-transform duration-200 ${menuAbierto ? 'rotate-180' : ''}`}/>
+                        </button>
+                        {menuAbierto && (
+                            <div className="absolute right-0 top-full mt-2 w-52 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.2)] rounded-xl z-[100] overflow-hidden flex flex-col border border-slate-200 animate-fade-in py-1">
+                                <button onClick={() => {setTab("proyecciones"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${tab === 'proyecciones' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+                                    <BarChart3 size={16} className={tab === 'proyecciones' ? "text-red-500" : "text-slate-400"}/> PROYECCIONES
+                                </button>
+                                <button onClick={() => {setTab("live"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${tab === 'live' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+                                    <Bell size={16} className={tab === 'live' ? "text-red-500" : "text-slate-400"}/> LIVE
+                                </button>
+                                <button onClick={() => {setTab("dirigentes"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${tab === 'dirigentes' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+                                    <UserPlus size={16} className={tab === 'dirigentes' ? "text-red-500" : "text-slate-400"}/> MIS DIRIGENTES
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* CONTENIDO PRINCIPAL */}
+            <main className="max-w-5xl mx-auto p-4 md:p-6">
+                
+                {/* 1. REGISTRO */}
                 {tab === "registro" && (
                     <div className="bg-white p-6 rounded-2xl shadow border-t-4 border-t-red-600 animate-fade-in">
                         <div className="bg-slate-50 p-4 rounded-xl mb-6"><label className="text-xs font-bold text-gray-500 mb-2 block">BUSCAR NOMBRE</label><div className="flex gap-2"><input type="text" className="flex-1 p-3 border rounded-xl font-bold uppercase" value={bNom} onChange={e=>setBNom(e.target.value)} onKeyDown={e=>e.key==='Enter'&&setResNom(Object.values(padronGlobal).filter(p=>p.distrito===perfil.distrito&&(p.nombre+" "+p.apellido).toLowerCase().includes(bNom.toLowerCase())).slice(0,20))} /><button onClick={()=>setResNom(Object.values(padronGlobal).filter(p=>p.distrito===perfil.distrito&&(p.nombre+" "+p.apellido).toLowerCase().includes(bNom.toLowerCase())).slice(0,20))} className="bg-slate-300 px-6 rounded-xl font-bold"><Search size={18}/></button></div>{resNom.length>0 && <div className="mt-2 bg-white border rounded-xl max-h-48 overflow-y-auto">{resNom.map(r=><div key={r.ci} onClick={()=>{setForm({...form, cedula:r.ci, nombre:r.nombre, apellido:r.apellido, local:r.local, mesa:r.mesa, orden:r.orden}); setResNom([]); setBNom("");}} className="p-3 border-b hover:bg-red-50 cursor-pointer text-sm font-black">{r.nombre} {r.apellido} <span className="text-xs text-gray-400 font-bold ml-2">C.I: {r.ci}</span></div>)}</div>}</div>
@@ -323,14 +453,132 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                         <input placeholder="TELÉFONO" className="w-full p-3 border-2 rounded-lg font-bold mb-4" value={form.telefono} onChange={e=>setForm({...form, telefono:e.target.value})}/>
                         <div className="grid grid-cols-3 gap-2 mb-4"><input readOnly className="p-3 border bg-gray-50 text-xs" value={form.local} placeholder="Local"/><input readOnly className="p-3 border bg-gray-50 font-bold" value={form.mesa?`Mesa ${form.mesa}`:'Mesa'}/><input readOnly className="p-3 border-2 border-red-100 bg-red-50 text-red-600 font-black" value={form.orden?`Ord ${form.orden}`:'Orden'}/></div>
                         <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-400 block mb-1">COORDINADOR</label><div className="flex gap-2">{mNC ? <><input className="flex-1 p-3 border-2 rounded font-bold uppercase" placeholder="NUEVO..." value={form.coordinador} onChange={e=>setForm({...form, coordinador:e.target.value.toUpperCase()})}/><button onClick={()=>setMNC(false)} className="bg-red-100 text-red-700 px-3 rounded font-black">X</button></> : <><select className="flex-1 p-3 border-2 rounded font-bold" value={form.coordinador} onChange={e=>setForm({...form, coordinador:e.target.value})}><option value="">Selec...</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><button onClick={()=>setMNC(true)} className="bg-slate-200 px-3 rounded font-black">+</button></>}</div></div><div><label className="text-[10px] font-bold text-gray-400 block mb-1">COLOR</label><select className="w-full p-3 rounded font-black text-white bg-slate-800" style={{backgroundColor: form.semaforo==='VERDE'?'#22c55e':form.semaforo==='AMARILLO'?'#eab308':'#ef4444'}} value={form.semaforo} onChange={e=>setForm({...form, semaforo:e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div></div>
-                        <button onClick={()=>{if(!form.cedula||!form.nombre)return alert("Datos incompletos"); if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado"); const d={...form, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()}; push(ref(db,'votos_seguros'), d); if(window.confirm("Guardado. ¿Enviar Carnet WP?")) enviarWhatsAppCarnet(d); setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:""})); setMNC(false);}} className="w-full mt-6 bg-red-700 text-white py-4 rounded-xl font-black shadow-lg">GUARDAR REGISTRO</button>
+                        <button onClick={()=>{ 
+                            if(!form.cedula||!form.nombre)return alert("Datos incompletos"); 
+                            if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado"); 
+                            const d={...form, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()}; 
+                            push(ref(db,'votos_seguros'), d); 
+                            alert("Guardado correctamente"); 
+                            setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:""})); 
+                            setMNC(false); 
+                        }} className="w-full mt-6 bg-red-700 text-white py-4 rounded-xl font-black shadow-lg">GUARDAR REGISTRO</button>
                     </div>
                 )}
+
+                {/* 2. LISTA */}
                 {tab === "lista" && (
-                    <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto"><div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
-                    <table className="w-full text-left min-w-[600px]"><thead className="bg-red-50 text-red-900 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Día D</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y text-sm">
-                        {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{ const vot=yaVotaronGlobal[generarLlave(v.distrito,v.mesa,v.orden)]; return <tr key={v.id}><td className="p-3 font-bold">{v.nombre} {v.apellido}<br/><span className="text-xs text-gray-500">M:{v.mesa} | C.I:{v.cedula}</span></td><td className="p-3">{vot?<span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {vot.hora}</span>:'-'}</td><td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, fotosConcejales[v.concejal])} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td></tr>})}
-                    </tbody></table>{misV.length>lim && <button onClick={()=>setLim(l=>l+50)} className="w-full p-4 bg-slate-100 font-bold text-slate-600 mt-4 rounded-xl">Cargar más...</button>}</div>
+                    <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto animate-fade-in">
+                        <div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
+                        <table className="w-full text-left min-w-[600px]"><thead className="bg-red-50 text-red-900 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Día D</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y text-sm">
+                            {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{ const vot=yaVotaronGlobal[generarLlave(v.distrito,v.mesa,v.orden)]; return <tr key={v.id}><td className="p-3 font-bold">{v.nombre} {v.apellido}<br/><span className="text-xs text-gray-500">M:{v.mesa} | C.I:{v.cedula}</span></td><td className="p-3">{vot?<span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {vot.hora}</span>:'-'}</td><td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, null)} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td></tr>})}
+                        </tbody></table>{misV.length>lim && <button onClick={()=>setLim(l=>l+50)} className="w-full p-4 bg-slate-100 font-bold text-slate-600 mt-4 rounded-xl">Cargar más...</button>}
+                    </div>
+                )}
+
+                {/* 3. DÍA D BUSCADOR (CON BOTÓN PASO PC) */}
+                {tab === "dia_d_buscador" && (
+                    <div className="animate-fade-in max-w-2xl mx-auto">
+                        <div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-t-red-600">
+                            <h2 className="font-black text-xl mb-4 text-slate-800 flex items-center gap-2"><Search className="text-red-600"/> BUSCADOR RÁPIDO DÍA D</h2>
+                            <p className="text-xs text-slate-500 font-bold mb-4">Ingresa el número de cédula de cualquier elector para consultar su estado o marcar su paso por PC.</p>
+                            <div className="flex gap-2 mb-6">
+                                <input type="number" placeholder="N° Cédula..." className="flex-1 p-4 border-2 rounded-xl font-bold outline-none focus:border-red-500" value={bDiaD} onChange={e=>setBDiaD(e.target.value)} />
+                                <button onClick={()=>{
+                                    const p = padronGlobal[bDiaD]; 
+                                    if(p) setResDiaD({...p, v:yaVotaronGlobal[generarLlave(p.distrito,p.mesa,p.orden)], pc:pasoPCGlobal[generarLlave(p.distrito,p.mesa,p.orden)]}); 
+                                    else setResDiaD("NO");
+                                }} className="bg-red-700 hover:bg-red-800 text-white px-6 rounded-xl font-bold transition-colors"><Search/></button>
+                            </div>
+                            
+                            {resDiaD === "NO" && <div className="p-4 bg-red-50 text-red-600 font-bold text-center rounded-xl border border-red-200">❌ Cédula no encontrada en el padrón.</div>}
+                            
+                            {resDiaD && resDiaD !== "NO" && (
+                                <div className="border-2 border-slate-200 rounded-xl p-6 bg-slate-50">
+                                    <div className="text-2xl font-black text-slate-800">{resDiaD.nombre} {resDiaD.apellido}</div>
+                                    <div className="text-sm font-bold text-gray-500 mb-6">C.I: {bDiaD} | {resDiaD.distrito}</div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div className="bg-white border shadow-sm p-3 rounded-xl text-center">
+                                            <div className="text-[10px] font-bold text-gray-400">MESA</div>
+                                            <div className="text-2xl font-black text-slate-700">{resDiaD.mesa}</div>
+                                        </div>
+                                        <div className="bg-white border shadow-sm p-3 rounded-xl text-center">
+                                            <div className="text-[10px] font-bold text-gray-400">ORDEN</div>
+                                            <div className="text-2xl font-black text-slate-700">{resDiaD.orden}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-4 border-t pt-4">
+                                        <button onClick={() => marcarPasoPCConcejal(generarLlave(resDiaD.distrito, resDiaD.mesa, resDiaD.orden), resDiaD.pc)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${resDiaD.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
+                                            {resDiaD.pc ? <>📍 YA PASÓ POR PC ({resDiaD.pc.hora}) - Por: {resDiaD.pc.registradoPorNombre || "Dirigente"}</> : <>⏳ MARCAR "PASÓ POR PC"</>}
+                                        </button>
+                                    </div>
+                                    
+                                    {resDiaD.v ? 
+                                        <div className="bg-green-100 border border-green-300 text-green-800 p-4 rounded-xl text-center font-black text-xl mt-4">✅ YA VOTÓ ({resDiaD.v.hora})</div> 
+                                    : 
+                                        <div className="bg-white border-2 text-gray-400 p-4 rounded-xl text-center font-black text-xl mt-4">⏳ AÚN NO VOTÓ</div>
+                                    }
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* 4. PROYECCIONES */}
+                {tab === "proyecciones" && (
+                    <div className="bg-white p-10 rounded-2xl shadow border-t-4 border-t-red-600 animate-fade-in text-center max-w-2xl mx-auto">
+                        <BarChart3 size={64} className="mx-auto text-slate-300 mb-4"/>
+                        <h2 className="text-2xl font-black text-slate-700">TUS PROYECCIONES</h2>
+                        <p className="text-slate-500 mt-2 font-medium">Próximamente verás aquí tus métricas detalladas.</p>
+                    </div>
+                )}
+
+                {/* 5. LIVE (SOLO FEED) */}
+                {tab === "live" && (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="bg-white p-6 rounded-2xl shadow border border-t-4 border-t-red-600">
+                            <h2 className="font-black text-xl mb-4 text-slate-800 flex items-center gap-2"><Bell className="text-red-600"/> FEED EN VIVO ({perfil.distrito})</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {ultimosVotosFeed.map((item, idx) => {
+                                    if (!item.elector) return null;
+                                    return (
+                                        <div key={idx} className="p-4 rounded-xl border bg-slate-50 flex flex-col justify-between shadow-sm">
+                                            <div>
+                                                <div className="font-black text-sm text-slate-800 uppercase truncate">{item.elector.nombre} {item.elector.apellido}</div>
+                                                <div className="text-[10px] text-gray-500 font-bold mt-1 uppercase">MESA: {item.elector.mesa} | VEEDOR: {item.data.veedor}</div>
+                                            </div>
+                                            <div className="text-right mt-3 pt-2 border-t"><div className="text-xs font-black text-green-600">✅ {item.data.hora}</div></div>
+                                        </div>
+                                    )
+                                })}
+                                {ultimosVotosFeed.length === 0 && <div className="col-span-full text-center text-gray-400 font-bold py-10 border-2 border-dashed rounded-xl">Aún no hay votos registrados en {perfil.distrito}.</div>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 6. MIS DIRIGENTES */}
+                {tab === "dirigentes" && (
+                    <div className="animate-fade-in max-w-2xl mx-auto">
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+                            <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2"><UserPlus className="text-red-600" /> AGREGAR DIRIGENTE</h2>
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <input type="number" placeholder="N° de Cédula" className="w-full md:w-1/3 p-3 border-2 border-slate-200 rounded-xl font-bold outline-none" value={formDirigente.cedula} onChange={e=>setFormDirigente({...formDirigente, cedula: e.target.value})} />
+                                <input type="text" placeholder="Nombre completo" className="w-full md:w-full p-3 border-2 border-slate-200 rounded-xl font-bold outline-none uppercase" value={formDirigente.nombre} onChange={e=>setFormDirigente({...formDirigente, nombre: e.target.value})} />
+                                <button onClick={() => { 
+                                    if(!formDirigente.cedula || !formDirigente.nombre) return alert("Faltan datos"); 
+                                    const nodoDirigente = miNom.replace(/[^a-zA-Z0-9]/g, '_'); 
+                                    set(ref(db, `dia_d/dirigentes_concejal/${nodoDirigente}/${formDirigente.cedula}`), { 
+                                        nombre: formDirigente.nombre.toUpperCase(), 
+                                        fechaAsignacion: new Date().toLocaleDateString() 
+                                    }); 
+                                    alert("Dirigente asignado"); 
+                                    setFormDirigente({cedula: "", nombre: ""}); 
+                                }} className="bg-slate-900 text-white font-black px-6 py-3 rounded-xl hover:bg-slate-800 shrink-0">AÑADIR</button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>
@@ -344,7 +592,8 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const [distritoFiltroMaster, setDistritoFiltroMaster] = useState(esMaster ? "TODOS" : perfil.distrito);
-    const [activeTab, setActiveTab] = useState("dashboard");
+     const [activeTab, setActiveTab] = useState("registro");
+    const [menuAbierto, setMenuAbierto] = useState(false);
     const [concejalEnDetalle, setConcejalEnDetalle] = useState(null);
     const [mesaEnDetalle, setMesaEnDetalle] = useState(null);
     const [filtroTexto, setFiltroTexto] = useState(""); 
@@ -716,16 +965,54 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                 </div>
             )}
 
-            <nav className="bg-white flex border-b shadow-sm overflow-x-auto justify-center print:hidden">
-                <button onClick={() => setActiveTab("registro")} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'registro' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><CheckCircle size={18}/> REGISTRO</button>
-                <button onClick={() => {setActiveTab("lista"); setLimiteListaAdmin(100);}} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'lista' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><Users size={18}/> LISTA</button>
-                <button onClick={() => setActiveTab("auditoria")} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'auditoria' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><AlertTriangle size={18}/> AUDITORÍA</button>
-                <button onClick={() => {setActiveTab("dashboard"); setConcejalEnDetalle(null);}} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'dashboard' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><BarChart3 size={18}/> DASHBOARD</button>
-                <button onClick={() => setActiveTab("dia_d")} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'dia_d' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><Activity size={18}/> MESAS</button>
-                <button onClick={() => {setActiveTab("escrutinio"); setMesaEscrutinioSelect("");}} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'escrutinio' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><Calculator size={18}/> ESCRUTINIO</button>
-                <button onClick={() => setActiveTab("usuarios")} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'usuarios' ? 'border-b-4 border-blue-600 text-blue-600' : 'text-gray-400'}`}><UserPlus size={18}/> USUARIOS</button>
-                <button onClick={() => setActiveTab("config")} className={`p-4 font-bold flex gap-2 shrink-0 ${activeTab === 'config' ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-400'}`}><Settings size={18}/> AJUSTES</button>
-            </nav>
+            <div className="bg-white flex border-b shadow-sm sticky top-[68px] z-50 print:hidden px-2 items-center justify-center w-full">
+                
+                <div className="flex items-center max-w-full pt-2 pb-2">
+                    
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
+                        <button onClick={() => {setActiveTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><CheckCircle size={16}/> REGISTRO</button>
+                        
+                        <button onClick={() => {setActiveTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><Users size={16}/> LISTA</button>
+                        
+                        <button onClick={() => {setActiveTab("dashboard"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'dashboard' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><BarChart3 size={16}/> PROYECCIONES</button>
+                        
+                        <button onClick={() => {setActiveTab("dia_d"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'dia_d' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><Bell size={16}/> LIVE / MESAS</button>
+                    </div>
+
+                    <div className="relative shrink-0 border-l border-slate-200 pl-2">
+                        
+                        <button 
+                            onClick={() => setMenuAbierto(!menuAbierto)} 
+                            className={`p-2 px-3 font-black text-[11px] flex gap-1 items-center rounded-lg transition-colors ${menuAbierto ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                        >
+                            MÁS OPCIONES <ChevronDown size={14} className={`transition-transform duration-200 ${menuAbierto ? 'rotate-180' : ''}`}/>
+                        </button>
+
+                        {menuAbierto && (
+                            <div className="absolute right-0 top-full mt-2 w-52 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.2)] rounded-xl z-[100] overflow-hidden flex flex-col border border-slate-200 animate-fade-in py-1">
+                                
+                                <button onClick={() => {setActiveTab("escrutinio"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${activeTab === 'escrutinio' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+                                    <Calculator size={16} className={activeTab === 'escrutinio' ? "text-red-500" : "text-slate-400"}/> ESCRUTINIO FINAL
+                                </button>
+                                
+                                <button onClick={() => {setActiveTab("auditoria"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${activeTab === 'auditoria' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+                                    <AlertTriangle size={16} className={activeTab === 'auditoria' ? "text-red-500" : "text-slate-400"}/> AUDITORÍA
+                                </button>
+                                
+                                <button onClick={() => {setActiveTab("usuarios"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${activeTab === 'usuarios' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+                                    <UserPlus size={16} className={activeTab === 'usuarios' ? "text-blue-500" : "text-slate-400"}/> USUARIOS
+                                </button>
+                                
+                                <button onClick={() => {setActiveTab("config"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${activeTab === 'config' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+                                    <Settings size={16} className="text-slate-400"/> AJUSTES
+                                </button>
+
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+            </div>
 
             <main className="max-w-7xl mx-auto p-4 md:p-6 mt-4 print:p-0">
                 
@@ -825,12 +1112,12 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                     <td className="p-3">
                                         <div className="flex justify-center items-center gap-3">
                                             <button onClick={()=>enviarWhatsAppCarnet(v)} className="text-green-500 hover:text-green-700"><Send size={16}/></button>
-                                            <button onClick={()=>imprimirCarnetFisico(v, fotosConcejales[v.concejal])} className="text-slate-700 hover:text-black"><Printer size={16}/></button>
+                                            <button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[v.concejal])} className="text-slate-700 hover:text-black"><Printer size={16}/></button>
                                             <button onClick={()=>eliminarVoto(v.id)} className="text-red-300 hover:text-red-600 ml-2 border-l pl-2"><Trash2 size={16}/></button>
                                         </div>
                                     </td>
-                                    </tr>
-                                    );
+                                </tr>
+                                );
                             })}
                             {listaMostrar.length === 0 && <tr><td colSpan="5" className="text-center py-10 text-gray-400 font-bold border-2 border-dashed rounded-xl">No hay votantes registrados o no coinciden con los filtros.</td></tr>}
                             </tbody>
@@ -970,40 +1257,42 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                             <h3 className="font-black text-red-700 mb-4 uppercase border-b-2 border-red-100 pb-2">{grupoName}</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                 {miembros.map(c => {
-                                                    const cant = votosFiltrados.filter(v => v.concejal === c).length;
-                                                    const votaron = votosFiltrados.filter(v => v.concejal === c && yaVotaronFiltrados[generarLlave(v.distrito, v.mesa, v.orden)]).length;
-                                                    const verdeC = votosFiltrados.filter(v => v.concejal === c && v.semaforo === 'VERDE').length;
-                                                    const amarilloC = votosFiltrados.filter(v => v.concejal === c && v.semaforo === 'AMARILLO').length;
-                                                    const rojoC = votosFiltrados.filter(v => v.concejal === c && v.semaforo === 'ROJO').length;
-                                                    const fotoBase = (fotosConcejales||{})[c];
-                                                    const pctMeta = configApp.meta_concejales > 0 ? Math.min(Math.round((cant/configApp.meta_concejales)*100), 100) : 0;
+const cant = votosFiltrados.filter(v => v.concejal === c).length;
+const votaron = votosFiltrados.filter(v => v.concejal === c && yaVotaronFiltrados[generarLlave(v.distrito, v.mesa, v.orden)]).length;
+const verdeC = votosFiltrados.filter(v => v.concejal === c && v.semaforo === 'VERDE').length;
+const amarilloC = votosFiltrados.filter(v => v.concejal === c && v.semaforo === 'AMARILLO').length;
+const rojoC = votosFiltrados.filter(v => v.concejal === c && v.semaforo === 'ROJO').length;
 
-                                                    return (
-                                                        <div key={c} onClick={() => {setConcejalEnDetalle(c); setFDetCoord("TODOS"); setFDetVoto("TODOS"); setFDetPC("TODOS"); setLimiteDetalleConcejal(100);}} className="cursor-pointer hover:scale-105 transition-transform duration-300 bg-gradient-to-br from-slate-900 to-black rounded-2xl p-5 text-white shadow-xl relative overflow-hidden group border border-slate-700">
-                                                            <div className="flex items-center gap-4 relative z-10">
-                                                                <div className="relative w-16 h-16 rounded-full border-2 border-red-500 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                                                                    {fotoBase ? <img src={fotoBase} alt={c} className="w-full h-full object-cover"/> : <IdCard className="text-red-300" size={32}/>}
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <div className="font-black text-sm truncate uppercase tracking-wider text-red-100">{c.includes(' - ') ? c.split(' - ')[1] : c}</div>
-                                                                    <div className="flex gap-1 mt-1">
-                                                                        <span className="w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center text-[9px] font-black">{verdeC}</span>
-                                                                        <span className="w-4 h-4 bg-yellow-500 text-white rounded-full flex items-center justify-center text-[9px] font-black">{amarilloC}</span>
-                                                                        <span className="w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-black">{rojoC}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <div className="text-3xl font-black text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">{cant}</div>
-                                                                    <div className="text-[9px] text-slate-400 font-bold uppercase">SEG. DE {configApp.meta_concejales}</div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex justify-between items-center mt-3 relative z-10">
-                                                                <div className="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold text-green-400">DÍA D: {votaron} VOTARON</div>
-                                                                <div className="text-[10px] font-black text-white">{pctMeta}%</div>
-                                                            </div>
-                                                            <div className="w-full bg-slate-800 h-1.5 rounded-full mt-1 relative z-10 overflow-hidden"><div className="bg-gradient-to-r from-red-700 to-red-400 h-full rounded-full transition-all" style={{width: `${pctMeta}%`}}></div></div>
-                                                        </div>
-                                                    );
+// FOTOS LOCALES
+const fotoLocal = FOTOS_LOCALES_CONCEJALES[c]; 
+const pctMeta = configApp.meta_concejales > 0 ? Math.min(Math.round((cant/configApp.meta_concejales)*100), 100) : 0;
+
+return (
+    <div key={c} onClick={() => {setConcejalEnDetalle(c); setFDetCoord("TODOS"); setFDetVoto("TODOS"); setFDetPC("TODOS"); setLimiteDetalleConcejal(100);}} className="cursor-pointer hover:scale-105 transition-transform duration-300 bg-gradient-to-br from-slate-900 to-black rounded-2xl p-5 text-white shadow-xl relative overflow-hidden group border border-slate-700">
+        <div className="flex items-center gap-4 relative z-10">
+            <div className="relative w-16 h-16 rounded-full border-2 border-red-500 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                {fotoLocal ? <img src={fotoLocal} alt={c} className="w-full h-full object-cover"/> : <IdCard className="text-red-300" size={32}/>}
+            </div>
+            <div className="flex-1">
+                <div className="font-black text-sm truncate uppercase tracking-wider text-red-100">{c.includes(' - ') ? c.split(' - ')[1] : c}</div>
+                <div className="flex gap-1 mt-1">
+                    <span className="w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center text-[9px] font-black">{verdeC}</span>
+                    <span className="w-4 h-4 bg-yellow-500 text-white rounded-full flex items-center justify-center text-[9px] font-black">{amarilloC}</span>
+                    <span className="w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-black">{rojoC}</span>
+                </div>
+            </div>
+            <div className="text-right">
+                <div className="text-3xl font-black text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">{cant}</div>
+                <div className="text-[9px] text-slate-400 font-bold uppercase">SEG. DE {configApp.meta_concejales}</div>
+            </div>
+        </div>
+        <div className="flex justify-between items-center mt-3 relative z-10">
+            <div className="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold text-green-400">DÍA D: {votaron} VOTARON</div>
+            <div className="text-[10px] font-black text-white">{pctMeta}%</div>
+        </div>
+        <div className="w-full bg-slate-800 h-1.5 rounded-full mt-1 relative z-10 overflow-hidden"><div className="bg-gradient-to-r from-red-700 to-red-400 h-full rounded-full transition-all" style={{width: `${pctMeta}%`}}></div></div>
+    </div>
+);
                                                 })}
                                             </div>
                                         </div>
@@ -1133,7 +1422,6 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                         <div className="flex flex-col lg:flex-row gap-6 p-6">
                                             <div className="w-full lg:w-1/3 space-y-4">
                                                 
-                                                {/* NUEVO: CAJA DEL VEEDOR ACTUAL */}
                                                 <div className="bg-slate-100 p-5 rounded-2xl border border-slate-300 shadow-inner">
                                                     <h3 className="font-black text-xs text-slate-500 mb-2 uppercase flex items-center gap-1"><Users size={14}/> Responsable Actual</h3>
                                                     {veedorAsignado ? (
