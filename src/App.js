@@ -32,7 +32,6 @@ const DISTRITOS_CANINDEYU = [
 const NOMBRE_DEPARTAMENTO = "CANINDEYÚ";
 
 // --- DICCIONARIO DE FOTOS LOCALES ---
-// Mapeo exacto entre el nombre en el sistema y el nombre del archivo de la foto (.jpg)
 const FOTOS_LOCALES_CONCEJALES = {
   "1-FABIO PORTILLO": "/fotos/1-fabio_portillo.jpg",
   "2- JULIO CABRERA": "/fotos/2- julio_cabrera.jpg",
@@ -44,6 +43,7 @@ const FOTOS_LOCALES_CONCEJALES = {
   "8- ISMAEL FERNANDEZ": "/fotos/8-ismael_fernández.jpg",
   "9- LUZ MABEL R.": "/fotos/9-luz_mabel_r.jpg" 
 };
+
 // --- HERRAMIENTAS GLOBALES ---
 const generarLlave = (distrito, mesa, orden) => `${distrito}_${mesa}_${orden}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
 const generarLlaveMesa = (distrito, mesa) => `${distrito}_${mesa}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
@@ -168,10 +168,7 @@ export default function BemoSystem() {
   if (rol === 'pendiente') return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center"><ShieldAlert size={64} className="text-yellow-500 mb-4" /><h1 className="text-2xl font-black mb-2">CUENTA EN REVISIÓN</h1><p className="text-gray-400 mb-8 max-w-sm">Avisa a tu Administrador Local para que active tu acceso.</p><button onClick={()=>signOut(auth)} className="bg-red-600 px-6 py-3 rounded-xl font-bold">CERRAR SESIÓN</button></div>);
   if (rol === 'veedor') return <AppVeedor padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} />;
   if (rol === 'concejal') return <AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} />;
-  
-  // AQUI SE PASA LA DB CORRECTAMENTE AL DIRIGENTE
   if (rol === 'dirigente') return <AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} configApp={configApp} auth={auth} db={db} />;
-  
   if (rol === 'super_admin' || rol === 'master_departamental') return <AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo}  />;
 
   return <div className="min-h-screen flex items-center justify-center"><button onClick={()=>signOut(auth)} className="bg-red-500 text-white p-4 rounded font-bold">ROL NO RECONOCIDO - CERRAR SESIÓN</button></div>;
@@ -257,25 +254,31 @@ function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental
 function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, db, distritoGlobal, setDistritoGlobal }) {
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const dataBruta = configuracionDepartamental[distritoGlobal] || {};
-    const configActual = { intendente: typeof dataBruta.intendente === 'string' ? dataBruta.intendente : "", lista: dataBruta.lista || "0", meta_concejales: dataBruta.meta_concejales || 500, concejales: Array.isArray(dataBruta.concejales) ? dataBruta.concejales : [] };
+    const configActual = { intendente: typeof dataBruta.intendente === 'string' ? dataBruta.intendente : "", lista: dataBruta.lista || "0", meta_intendente: dataBruta.meta_intendente || 5000, meta_concejales: dataBruta.meta_concejales || 500, concejales: Array.isArray(dataBruta.concejales) ? dataBruta.concejales : [] };
 
-    const [tInt, setTInt] = useState(""); const [tLis, setTList] = useState(""); const [tMet, setTMeta] = useState(""); const [nConc, setNConc] = useState("");
+    const [tInt, setTInt] = useState(""); const [tLis, setTList] = useState(""); const [tMetInt, setTMetInt] = useState(""); const [tMet, setTMeta] = useState(""); const [nConc, setNConc] = useState("");
     const [idxEd, setIdxEd] = useState(null); const [valEd, setValEd] = useState(""); const [subiendo, setSubiendo] = useState(null);
 
-    useEffect(() => { setTInt(configActual.intendente); setTList(configActual.lista); setTMeta(configActual.meta_concejales); setIdxEd(null); }, [distritoGlobal, configuracionDepartamental]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { setTInt(configActual.intendente); setTList(configActual.lista); setTMetInt(configActual.meta_intendente); setTMeta(configActual.meta_concejales); setIdxEd(null); }, [distritoGlobal, configuracionDepartamental]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const guardarDistrito = () => { set(ref(db, `configuracion/${distritoGlobal}`), { ...dataBruta, intendente: tInt.toUpperCase() || "NO CONFIGURADO", lista: tLis, meta_concejales: parseInt(tMet) || 500, concejales: configActual.concejales }); alert(`✅ Guardado.`); };
+    const guardarDistrito = () => { set(ref(db, `configuracion/${distritoGlobal}`), { ...dataBruta, intendente: tInt.toUpperCase() || "NO CONFIGURADO", lista: tLis, meta_intendente: parseInt(tMetInt) || 5000, meta_concejales: parseInt(tMet) || 500, concejales: configActual.concejales }); alert(`✅ Guardado.`); };
     const subirFoto = async (e, n) => { const f = e.target.files[0]; if(!f) return; setSubiendo(n); try { const r = storageRef(storage, `fotos/${n.replace(/[^a-zA-Z0-9]/g, '_')}`); await uploadBytes(r, f); await set(ref(db, `concejales_fotos/${n}`), await getDownloadURL(r)); alert("✅ Foto lista."); } catch(err) { alert(err.message); } setSubiendo(null); };
 
     return (
         <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-red-700 space-y-6">
             <h2 className="text-2xl font-black border-b pb-4"><Settings className="inline mr-2 text-red-600"/>AJUSTES: {distritoGlobal}</h2>
             {esMaster && <select className="w-full p-4 border-2 rounded-xl font-black text-lg" value={distritoGlobal} onChange={e=>setDistritoGlobal(e.target.value)}>{DISTRITOS_CANINDEYU.map(d=><option key={d}>{d}</option>)}</select>}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-red-50 p-6 rounded-2xl"><div className="col-span-full"><label className="text-xs font-bold text-red-700">INTENDENTE</label><input className="w-full p-3 border rounded font-black uppercase" value={tInt} onChange={e=>setTInt(e.target.value)}/></div><div><label className="text-xs font-bold text-red-700">LISTA</label><input className="w-full p-3 border rounded font-black" value={tLis} onChange={e=>setTList(e.target.value)}/></div><div><label className="text-xs font-bold text-red-700">META INDIVIDUAL</label><input type="number" className="w-full p-3 border rounded font-black" value={tMet} onChange={e=>setTMeta(e.target.value)}/></div><button onClick={guardarDistrito} className="col-span-full bg-red-700 text-white py-3 rounded-xl font-black">GUARDAR DATOS</button></div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-red-50 p-6 rounded-2xl">
+                <div className="col-span-full md:col-span-2"><label className="text-xs font-bold text-red-700">INTENDENTE</label><input className="w-full p-3 border rounded font-black uppercase" value={tInt} onChange={e=>setTInt(e.target.value)}/></div>
+                <div className="col-span-1"><label className="text-xs font-bold text-red-700">LISTA</label><input className="w-full p-3 border rounded font-black" value={tLis} onChange={e=>setTList(e.target.value)}/></div>
+                <div className="col-span-1"><label className="text-xs font-bold text-red-700">META INTENDENTE</label><input type="number" className="w-full p-3 border rounded font-black border-red-400" value={tMetInt} onChange={e=>setTMetInt(e.target.value)}/></div>
+                <div className="col-span-full md:col-span-2"><label className="text-xs font-bold text-red-700">META INDIVIDUAL CONCEJAL</label><input type="number" className="w-full p-3 border rounded font-black" value={tMet} onChange={e=>setTMeta(e.target.value)}/></div>
+                <button onClick={guardarDistrito} className="col-span-full md:col-span-2 bg-red-700 text-white py-3 rounded-xl font-black mt-4 md:mt-0">GUARDAR DATOS</button>
+            </div>
             <div className="bg-slate-50 p-6 rounded-2xl border"><h3 className="font-black mb-4">CONCEJALES (EQUIPOS)</h3><div className="flex gap-2 mb-6"><input type="text" placeholder="LETRA (Ej: 2F)" id="inSub" className="w-1/4 p-3 border rounded uppercase font-bold"/><input type="text" placeholder="NOMBRE..." value={nConc} onChange={e=>setNConc(e.target.value)} className="flex-1 p-3 border rounded uppercase font-bold"/><button onClick={()=>{const s=document.getElementById('inSub').value.trim().toUpperCase(); if(!nConc)return; const f=s?`${s} - ${nConc.toUpperCase()}`:nConc.toUpperCase(); set(ref(db, `configuracion/${distritoGlobal}/concejales`), [...configActual.concejales, f]); setNConc(""); document.getElementById('inSub').value="";}} className="bg-slate-800 text-white px-6 rounded font-bold">AÑADIR</button></div>
                 <div className="space-y-6">{Object.entries(configActual.concejales.reduce((acc,c,idx)=>{const p=c.split(' - ');const g=p.length>1?`LISTA ${p[0]}`:'SIN EQUIPO';if(!acc[g])acc[g]=[];acc[g].push({n:c,idx});return acc;},{})).map(([g,m])=>(<div key={g} className="bg-white p-4 rounded-xl border"><h4 className="font-black text-red-600 mb-3 border-b">{g}</h4><div className="grid grid-cols-1 md:grid-cols-3 gap-3">{m.map(i=>(<div key={i.idx} className="bg-slate-50 p-2 rounded border flex justify-between items-center">{idxEd===i.idx?(<div className="flex gap-2 w-full"><input className="flex-1 border p-1 text-xs uppercase" value={valEd} onChange={e=>setValEd(e.target.value)} autoFocus/><button onClick={()=>{const l=[...configActual.concejales];l[i.idx]=valEd.toUpperCase();set(ref(db,`configuracion/${distritoGlobal}/concejales`),l);setIdxEd(null);}} className="bg-green-500 text-white p-1 rounded"><Save size={14}/></button></div>):(<><span className="font-black text-xs uppercase truncate mr-2">{i.n.includes(' - ')?i.n.split(' - ')[1]:i.n}</span><div className="flex gap-2 shrink-0 items-center"><label className="cursor-pointer text-emerald-600">{subiendo===i.n?<RefreshCw size={14} className="animate-spin"/>:<Camera size={14}/>}<input type="file" accept="image/*" className="hidden" onChange={e=>subirFoto(e,i.n)}/></label><button onClick={()=>{setIdxEd(i.idx);setValEd(i.n);}} className="text-blue-500"><Edit2 size={14}/></button><button onClick={()=>{if(window.confirm("¿Borrar?")){const l=[...configActual.concejales];l.splice(i.idx,1);set(ref(db,`configuracion/${distritoGlobal}/concejales`),l);}}} className="text-red-500"><Trash2 size={14}/></button></div></>)}</div>))}</div></div>))}</div>
             </div>
-            {esMaster && <button onClick={()=>{if(window.confirm("¿Restablecer todo a cero?")) { const nc={}; DISTRITOS_CANINDEYU.forEach(d=>{nc[d]={intendente:"",lista:"",meta_concejales:500,concejales:[]}}); set(ref(db,'configuracion'),nc); alert("Restablecido");}}} className="w-full bg-red-100 text-red-800 py-3 rounded-xl font-black mt-8">⚠️ RESTABLECER DEPARTAMENTO A FÁBRICA</button>}
+            {esMaster && <button onClick={()=>{if(window.confirm("¿Restablecer todo a cero?")) { const nc={}; DISTRITOS_CANINDEYU.forEach(d=>{nc[d]={intendente:"",lista:"",meta_intendente:5000,meta_concejales:500,concejales:[]}}); set(ref(db,'configuracion'),nc); alert("Restablecido");}}} className="w-full bg-red-100 text-red-800 py-3 rounded-xl font-black mt-8">⚠️ RESTABLECER DEPARTAMENTO A FÁBRICA</button>}
         </div>
     );
 }
@@ -283,27 +286,128 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
 // ==============================================================================================
 // 3. APPS POR ROL (VEEDOR, CONCEJAL, DIRIGENTE)
 // ==============================================================================================
-
 function AppVeedor({ padronGlobal, yaVotaronGlobal, mesasCerradas, asignacionesVeedores, escrutinioGlobal, configApp, auth, db }) {
-    const [vs, setVs] = useState(null); const [ciIn, setCiIn] = useState(""); const [fMesa, setFMesa] = useState(""); const [fEsc, setFEsc] = useState({ intendente: "", concejales: {} }); const [mEdEsc, setMEdEsc] = useState(false);
+    const [vs, setVs] = useState(null); 
+    const [ciIn, setCiIn] = useState(""); 
+    const [fMesa, setFMesa] = useState(""); 
+    
+    const [fEsc, setFEsc] = useState({ 
+        intendente: "", 
+        concejales: {}, 
+        rivalesIntendente: [], 
+        rivalesConcejales: [], 
+        blancos: "", 
+        nulos: "" 
+    }); 
+    const [mEdEsc, setMEdEsc] = useState(false);
+    
     useEffect(() => { const g = localStorage.getItem('veedor_bemo_sesion'); if (g) { const p = JSON.parse(g); setVs(p); set(ref(db, `dia_d/veedores_online/${p.ci}`), true); } }, [db]);
-    const llMA = vs ? generarLlaveMesa(vs.distrito, vs.mesa) : null; const isC = llMA && mesasCerradas[llMA]; const miEsc = llMA ? escrutinioGlobal[llMA] : null;
-    useEffect(() => { if(miEsc && !mEdEsc) setFEsc(miEsc); else if(!miEsc && isC) { const ic={}; (configApp.concejales||[]).forEach(c=>ic[c]=""); setFEsc({intendente:"", concejales:ic}); setMEdEsc(true); } }, [miEsc, isC, configApp, mEdEsc]);
+    
+    const llMA = vs ? generarLlaveMesa(vs.distrito, vs.mesa) : null; 
+    const isC = llMA && mesasCerradas[llMA]; 
+    const miEsc = llMA ? escrutinioGlobal[llMA] : null;
+    
+    useEffect(() => { 
+        if(miEsc && !mEdEsc) {
+            setFEsc({
+                intendente: miEsc.intendente || "",
+                concejales: miEsc.concejales || {},
+                rivalesIntendente: miEsc.rivalesIntendente || [],
+                rivalesConcejales: miEsc.rivalesConcejales || [],
+                blancos: miEsc.blancos || "",
+                nulos: miEsc.nulos || ""
+            });
+        } else if(!miEsc && isC) { 
+            const ic={}; 
+            (configApp.concejales||[]).forEach(c=>ic[c]=""); 
+            setFEsc({ intendente: "", concejales: ic, rivalesIntendente: [], rivalesConcejales: [], blancos: "", nulos: "" }); 
+            setMEdEsc(true); 
+        } 
+    }, [miEsc, isC, configApp, mEdEsc]);
 
     const padronMesa = useMemo(()=>Object.entries(padronGlobal||{}).map(([ci,d])=>({ci,...d})).filter(p=>vs && String(p.mesa)===String(vs.mesa) && p.distrito===vs.distrito).sort((a,b)=>a.orden-b.orden), [padronGlobal, vs]);
 
     return (
         <div className="min-h-screen pb-20 bg-slate-50">
           <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-xl border-b-4 border-red-600"><div className="flex items-center gap-3"><span className="bg-red-700 px-2 rounded font-black">BEMO</span><div><h1 className="text-sm font-bold uppercase truncate">{configApp.intendente||"S/D"}</h1><p className="text-[10px] text-gray-400 font-bold uppercase">MESA: {vs?.mesa||'-'}</p></div></div><button onClick={()=>{localStorage.removeItem('veedor_bemo_sesion'); signOut(auth);}} className="text-[10px] bg-red-600 px-3 py-1.5 rounded-full font-black">SALIR</button></header>
+          
           {!vs ? (
             <div className="p-6 max-w-md mx-auto mt-10 bg-white rounded-3xl shadow-xl"><h2 className="text-xl font-black mb-4 text-center">CÉDULA VEEDOR</h2><input type="number" className="w-full p-4 border-2 rounded-xl text-center text-xl font-black mb-4" value={ciIn} onChange={e=>setCiIn(e.target.value)} /><button onClick={()=>{const a=Object.values(asignacionesVeedores||{}).find(x=>String(x.ci)===String(ciIn)); if(a){setVs(a); localStorage.setItem('veedor_bemo_sesion',JSON.stringify(a)); set(ref(db,`dia_d/veedores_online/${a.ci}`),true);} else alert("No asignado.");}} className="w-full bg-slate-900 text-white py-4 rounded-xl font-black">ENTRAR</button></div>
           ) : (
             <main className="p-2 max-w-4xl mx-auto mt-2">
               <div className="bg-white p-4 rounded-2xl shadow mb-4 border-l-8 border-green-500 flex justify-between items-center"><div><h2 className="font-black text-xl leading-none uppercase">MESA {vs.mesa}</h2><p className="text-[10px] font-black text-gray-500 mt-1 uppercase">{vs.nombre}</p></div>{isC && <button onClick={()=>{if(window.confirm("¿Reabrir?")) {remove(ref(db, `dia_d/mesas_cerradas/${llMA}`)); setMEdEsc(false);}}} className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-[10px] font-black"><Unlock size={12} className="inline mr-1"/>REABRIR</button>}</div>
+              
               {!isC ? (
-                  <><div className="bg-white p-3 rounded-xl shadow mb-2"><input type="number" placeholder="BUSCAR ORDEN/C.I..." className="w-full p-2 font-black outline-none text-center" value={fMesa} onChange={e=>setFMesa(e.target.value)} /></div><div className="bg-white rounded-xl shadow overflow-hidden mb-6"><table className="w-full text-left"><thead className="bg-slate-800 text-white text-[10px] uppercase"><tr><th className="p-3 text-center">Ord</th><th className="p-3">Votante</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y">{padronMesa.filter(v=>v.ci.includes(fMesa)||v.orden.toString().includes(fMesa)).map(v => { const llV = generarLlave(vs.distrito, vs.mesa, v.orden); const vot = yaVotaronGlobal[llV]; return (<tr key={v.ci} className={vot?'bg-green-50':''}><td className="p-3 text-center font-black text-slate-400">{v.orden}</td><td className="p-3 leading-tight"><div className="font-black text-sm">{v.nombre} {v.apellido}</div><div className="text-[9px] text-gray-500 font-bold">C.I: {v.ci}</div></td><td className="p-3"><button onClick={()=>{set(ref(db, `dia_d/votos_efectuados/${llV}`), vot?null:{hora:new Date().toLocaleTimeString(), timestamp:Date.now(), veedor:vs.nombre});}} className={`w-full py-2 rounded font-black text-[10px] border-2 ${vot?'bg-green-500 border-green-600 text-white':'border-slate-300 text-slate-500'}`}>{vot?'VOTÓ':'PINTAR'}</button></td></tr>); })}</tbody></table></div><button onClick={()=>{if(window.confirm("¿Cerrar Escrutinio?")){set(ref(db, `dia_d/mesas_cerradas/${llMA}`),{hora:new Date().toLocaleTimeString(), cerradoPor:vs.nombre}); setMEdEsc(true);}}} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-2xl flex justify-center gap-2"><Lock/> CERRAR MESA</button></>
+                  <>
+                      <div className="bg-white p-3 rounded-xl shadow mb-2"><input type="number" placeholder="BUSCAR ORDEN/C.I..." className="w-full p-2 font-black outline-none text-center" value={fMesa} onChange={e=>setFMesa(e.target.value)} /></div>
+                      <div className="bg-white rounded-xl shadow overflow-hidden mb-6"><table className="w-full text-left"><thead className="bg-slate-800 text-white text-[10px] uppercase"><tr><th className="p-3 text-center">Ord</th><th className="p-3">Votante</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y">{padronMesa.filter(v=>v.ci.includes(fMesa)||v.orden.toString().includes(fMesa)).map(v => { const llV = generarLlave(vs.distrito, vs.mesa, v.orden); const vot = yaVotaronGlobal[llV]; return (<tr key={v.ci} className={vot?'bg-green-50':''}><td className="p-3 text-center font-black text-slate-400">{v.orden}</td><td className="p-3 leading-tight"><div className="font-black text-sm">{v.nombre} {v.apellido}</div><div className="text-[9px] text-gray-500 font-bold">C.I: {v.ci}</div></td><td className="p-3"><button onClick={()=>{set(ref(db, `dia_d/votos_efectuados/${llV}`), vot?null:{hora:new Date().toLocaleTimeString(), timestamp:Date.now(), veedor:vs.nombre});}} className={`w-full py-2 rounded font-black text-[10px] border-2 ${vot?'bg-green-500 border-green-600 text-white':'border-slate-300 text-slate-500'}`}>{vot?'VOTÓ':'PINTAR'}</button></td></tr>); })}</tbody></table></div>
+                      <button onClick={()=>{if(window.confirm("¿Cerrar Escrutinio?")){set(ref(db, `dia_d/mesas_cerradas/${llMA}`),{hora:new Date().toLocaleTimeString(), cerradoPor:vs.nombre}); setMEdEsc(true);}}} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-2xl flex justify-center gap-2"><Lock/> CERRAR MESA</button>
+                  </>
               ) : (
-                  <div className="bg-white rounded-3xl shadow-xl p-6 border-t-8 border-slate-900"><div className="text-center mb-6"><ClipboardList size={32} className="mx-auto text-blue-600 mb-2"/><h2 className="text-xl font-black uppercase">ACTA FINAL</h2></div><div className="bg-red-50 p-4 rounded-xl mb-4"><h4 className="font-black text-xs text-red-900 mb-2">INTENDENTE</h4><input type="number" className="w-full p-3 text-2xl font-black text-center rounded" value={fEsc.intendente||""} onChange={e=>setFEsc({...fEsc, intendente:e.target.value})} /></div><div className="space-y-2 mb-6">{(configApp.concejales||[]).filter(c=>c!=="SIN ASIGNAR").map(c=>(<div key={c} className="flex justify-between items-center bg-slate-50 p-3 rounded border"><span className="font-black text-[10px] uppercase truncate w-2/3">{c.includes('-')?c.split('-')[1]:c}</span><input type="number" className="w-1/3 p-2 font-black text-center rounded border" value={fEsc.concejales?.[c]||""} onChange={e=>setFEsc({...fEsc, concejales:{...fEsc.concejales, [c]:e.target.value}})} /></div>))}</div><button onClick={()=>{set(ref(db, `dia_d/escrutinio/${llMA}`), fEsc); alert("Guardado"); setMEdEsc(false);}} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-lg">GUARDAR ACTA</button></div>
+                  <div className="bg-white rounded-3xl shadow-xl p-4 md:p-6 border-t-8 border-slate-900">
+                      <div className="text-center mb-6"><ClipboardList size={32} className="mx-auto text-blue-600 mb-2"/><h2 className="text-xl font-black uppercase">ACTA FINAL MESA {vs.mesa}</h2></div>
+                      
+                      <h3 className="font-black text-slate-800 border-b-2 border-slate-200 pb-2 mb-4">NUESTRO EQUIPO</h3>
+                      <div className="bg-red-50 p-4 rounded-xl mb-4">
+                          <h4 className="font-black text-xs text-red-900 mb-2 uppercase">INTENDENTE: {configApp.intendente}</h4>
+                          <input type="number" placeholder="0" className="w-full p-3 text-2xl font-black text-center rounded border outline-none focus:border-red-500" value={fEsc.intendente||""} onChange={e=>setFEsc({...fEsc, intendente:e.target.value})} />
+                      </div>
+                      <div className="space-y-2 mb-8">
+                          <h4 className="font-black text-xs text-slate-500 mb-2">NUESTROS CONCEJALES</h4>
+                          {(configApp.concejales||[]).filter(c=>c!=="SIN ASIGNAR").map(c=>(
+                              <div key={c} className="flex justify-between items-center bg-slate-50 p-3 rounded border">
+                                  <span className="font-black text-[10px] uppercase truncate w-2/3">{c.includes('-')?c.split('-')[1]:c}</span>
+                                  <input type="number" placeholder="Votos" className="w-1/3 p-2 font-black text-center rounded border outline-none" value={fEsc.concejales?.[c]||""} onChange={e=>setFEsc({...fEsc, concejales:{...fEsc.concejales, [c]:e.target.value}})} />
+                              </div>
+                          ))}
+                      </div>
+
+                      <h3 className="font-black text-slate-800 border-b-2 border-slate-200 pb-2 mb-4">OTROS CANDIDATOS (RIVALES)</h3>
+                      
+                      <div className="mb-6 bg-slate-50 p-4 rounded-xl border">
+                          <div className="flex justify-between items-center mb-3">
+                              <h4 className="font-black text-xs text-slate-500">INTENDENTES RIVALES</h4>
+                              <button onClick={() => setFEsc({...fEsc, rivalesIntendente: [...(fEsc.rivalesIntendente||[]), {nombre:"", votos:""}]})} className="text-[10px] bg-slate-800 text-white px-3 py-1 rounded font-bold">+ AÑADIR</button>
+                          </div>
+                          {(fEsc.rivalesIntendente||[]).map((r, i) => (
+                              <div key={i} className="flex gap-2 mb-2 animate-fade-in">
+                                  <input type="text" placeholder="Nombre/Lista..." className="flex-1 p-2 border rounded text-xs font-bold uppercase outline-none" value={r.nombre} onChange={e => { const n = [...fEsc.rivalesIntendente]; n[i].nombre = e.target.value; setFEsc({...fEsc, rivalesIntendente: n}); }} />
+                                  <input type="number" placeholder="Votos" className="w-20 p-2 border rounded text-xs font-black text-center outline-none" value={r.votos} onChange={e => { const n = [...fEsc.rivalesIntendente]; n[i].votos = e.target.value; setFEsc({...fEsc, rivalesIntendente: n}); }} />
+                                  <button onClick={() => { const n = [...fEsc.rivalesIntendente]; n.splice(i, 1); setFEsc({...fEsc, rivalesIntendente: n}); }} className="bg-red-100 text-red-600 px-3 rounded font-black hover:bg-red-200">X</button>
+                              </div>
+                          ))}
+                          {(fEsc.rivalesIntendente||[]).length === 0 && <p className="text-[10px] text-gray-400 font-bold">Haz clic en + AÑADIR si hay votos para otros intendentes.</p>}
+                      </div>
+
+                      <div className="mb-8 bg-slate-50 p-4 rounded-xl border">
+                          <div className="flex justify-between items-center mb-3">
+                              <h4 className="font-black text-xs text-slate-500">CONCEJALES RIVALES</h4>
+                              <button onClick={() => setFEsc({...fEsc, rivalesConcejales: [...(fEsc.rivalesConcejales||[]), {nombre:"", votos:""}]})} className="text-[10px] bg-slate-800 text-white px-3 py-1 rounded font-bold">+ AÑADIR</button>
+                          </div>
+                          {(fEsc.rivalesConcejales||[]).map((r, i) => (
+                              <div key={i} className="flex gap-2 mb-2 animate-fade-in">
+                                  <input type="text" placeholder="Nombre/Lista..." className="flex-1 p-2 border rounded text-xs font-bold uppercase outline-none" value={r.nombre} onChange={e => { const n = [...fEsc.rivalesConcejales]; n[i].nombre = e.target.value; setFEsc({...fEsc, rivalesConcejales: n}); }} />
+                                  <input type="number" placeholder="Votos" className="w-20 p-2 border rounded text-xs font-black text-center outline-none" value={r.votos} onChange={e => { const n = [...fEsc.rivalesConcejales]; n[i].votos = e.target.value; setFEsc({...fEsc, rivalesConcejales: n}); }} />
+                                  <button onClick={() => { const n = [...fEsc.rivalesConcejales]; n.splice(i, 1); setFEsc({...fEsc, rivalesConcejales: n}); }} className="bg-red-100 text-red-600 px-3 rounded font-black hover:bg-red-200">X</button>
+                              </div>
+                          ))}
+                          {(fEsc.rivalesConcejales||[]).length === 0 && <p className="text-[10px] text-gray-400 font-bold">Haz clic en + AÑADIR si hay votos para otras listas de concejales.</p>}
+                      </div>
+
+                      <h3 className="font-black text-slate-800 border-b-2 border-slate-200 pb-2 mb-4">VOTOS NULOS Y BLANCOS</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-8">
+                          <div className="bg-gray-100 p-3 rounded-xl border">
+                              <label className="text-[10px] font-bold text-gray-500 block mb-1">VOTOS BLANCOS</label>
+                              <input type="number" placeholder="0" className="w-full p-2 border rounded-lg text-center font-black outline-none focus:border-gray-400" value={fEsc.blancos||""} onChange={e=>setFEsc({...fEsc, blancos: e.target.value})} />
+                          </div>
+                          <div className="bg-red-50 p-3 rounded-xl border border-red-100">
+                              <label className="text-[10px] font-bold text-red-400 block mb-1">VOTOS NULOS</label>
+                              <input type="number" placeholder="0" className="w-full p-2 border border-red-200 rounded-lg text-center font-black outline-none focus:border-red-400 text-red-600" value={fEsc.nulos||""} onChange={e=>setFEsc({...fEsc, nulos: e.target.value})} />
+                          </div>
+                      </div>
+
+                      <button onClick={()=>{set(ref(db, `dia_d/escrutinio/${llMA}`), fEsc); alert("Acta Final Guardada en el Sistema."); setMEdEsc(false);}} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-5 rounded-xl font-black shadow-lg text-lg">GUARDAR ACTA COMPLETA</button>
+                  </div>
               )}
             </main>
           )}
@@ -346,15 +450,11 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
     const [tab, setTab] = useState("registro"); 
     const [menuAbierto, setMenuAbierto] = useState(false);
     
-    // Estados para el Registro
     const [bNom, setBNom] = useState(""); 
     const [resNom, setResNom] = useState([]); 
     const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, local:"", mesa:"", orden:"", concejal:perfil.nombre_oficial||"", coordinador:"", semaforo:"VERDE" });
-    
-    // Estados para Gestión de Dirigentes
     const [formDirigente, setFormDirigente] = useState({ cedula: "", nombre: "" });
 
-    // Estados para el nuevo Buscador Día D
     const [bDiaD, setBDiaD] = useState(""); 
     const [resDiaD, setResDiaD] = useState(null);
 
@@ -366,14 +466,12 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
     const [fS, setFS] = useState("TODOS"); 
     const [mNC, setMNC] = useState(false);
 
-    // Lógica para el Feed del Live
     const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
     const yaVotaronFiltrados = useMemo(() => {
         const o = {}; Object.keys(yaVotaronGlobal||{}).forEach(k => { if(k.startsWith(perfil.distrito)) o[k] = yaVotaronGlobal[k]; }); return o;
     }, [yaVotaronGlobal, perfil.distrito]);
     const ultimosVotosFeed = useMemo(() => { return Object.entries(yaVotaronFiltrados || {}).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)).slice(0, 12).map(([llave, data]) => ({ llave, data, elector: padronLlaves[llave] })); }, [yaVotaronFiltrados, padronLlaves]);
     
-    // NUEVA FUNCIÓN: CONCEJAL MARCA PASO PC
     const marcarPasoPCConcejal = (llave, pcData) => {
         if (pcData) {
             remove(ref(db, `dia_d/paso_pc_checkins/${llave}`));
@@ -408,18 +506,14 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                 <span className="text-green-700 bg-green-50 px-3 py-1 rounded-full">🟢 {misV.filter(v=>v.semaforo==='VERDE').length}</span>
             </div>
 
-            {/* MENÚ REORGANIZADO */}
             <div className="bg-white flex border-b shadow-sm sticky top-[68px] z-50 print:hidden px-2 items-center justify-center w-full">
                 <div className="flex items-center max-w-full pt-2 pb-2">
-                    
-                    {/* PESTAÑAS PRINCIPALES CENTRADAS */}
                     <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
                         <button onClick={() => {setTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><CheckCircle size={16}/> REGISTRO</button>
                         <button onClick={() => {setTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={16}/> LISTA</button>
                         <button onClick={() => {setTab("dia_d_buscador"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'dia_d_buscador' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Search size={16}/> DÍA D BUSCADOR</button>
                     </div>
 
-                    {/* MENÚ DESPLEGABLE CON LAS DEMÁS OPCIONES */}
                     <div className="relative shrink-0 border-l border-slate-200 pl-2">
                         <button onClick={() => setMenuAbierto(!menuAbierto)} className={`p-2 px-3 font-black text-[11px] flex gap-1 items-center rounded-lg transition-colors ${menuAbierto ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100'}`}>
                             MÁS OPCIONES <ChevronDown size={14} className={`transition-transform duration-200 ${menuAbierto ? 'rotate-180' : ''}`}/>
@@ -441,10 +535,7 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                 </div>
             </div>
 
-            {/* CONTENIDO PRINCIPAL */}
             <main className="max-w-5xl mx-auto p-4 md:p-6">
-                
-                {/* 1. REGISTRO */}
                 {tab === "registro" && (
                     <div className="bg-white p-6 rounded-2xl shadow border-t-4 border-t-red-600 animate-fade-in">
                         <div className="bg-slate-50 p-4 rounded-xl mb-6"><label className="text-xs font-bold text-gray-500 mb-2 block">BUSCAR NOMBRE</label><div className="flex gap-2"><input type="text" className="flex-1 p-3 border rounded-xl font-bold uppercase" value={bNom} onChange={e=>setBNom(e.target.value)} onKeyDown={e=>e.key==='Enter'&&setResNom(Object.values(padronGlobal).filter(p=>p.distrito===perfil.distrito&&(p.nombre+" "+p.apellido).toLowerCase().includes(bNom.toLowerCase())).slice(0,20))} /><button onClick={()=>setResNom(Object.values(padronGlobal).filter(p=>p.distrito===perfil.distrito&&(p.nombre+" "+p.apellido).toLowerCase().includes(bNom.toLowerCase())).slice(0,20))} className="bg-slate-300 px-6 rounded-xl font-bold"><Search size={18}/></button></div>{resNom.length>0 && <div className="mt-2 bg-white border rounded-xl max-h-48 overflow-y-auto">{resNom.map(r=><div key={r.ci} onClick={()=>{setForm({...form, cedula:r.ci, nombre:r.nombre, apellido:r.apellido, local:r.local, mesa:r.mesa, orden:r.orden}); setResNom([]); setBNom("");}} className="p-3 border-b hover:bg-red-50 cursor-pointer text-sm font-black">{r.nombre} {r.apellido} <span className="text-xs text-gray-400 font-bold ml-2">C.I: {r.ci}</span></div>)}</div>}</div>
@@ -453,29 +544,19 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                         <input placeholder="TELÉFONO" className="w-full p-3 border-2 rounded-lg font-bold mb-4" value={form.telefono} onChange={e=>setForm({...form, telefono:e.target.value})}/>
                         <div className="grid grid-cols-3 gap-2 mb-4"><input readOnly className="p-3 border bg-gray-50 text-xs" value={form.local} placeholder="Local"/><input readOnly className="p-3 border bg-gray-50 font-bold" value={form.mesa?`Mesa ${form.mesa}`:'Mesa'}/><input readOnly className="p-3 border-2 border-red-100 bg-red-50 text-red-600 font-black" value={form.orden?`Ord ${form.orden}`:'Orden'}/></div>
                         <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-400 block mb-1">COORDINADOR</label><div className="flex gap-2">{mNC ? <><input className="flex-1 p-3 border-2 rounded font-bold uppercase" placeholder="NUEVO..." value={form.coordinador} onChange={e=>setForm({...form, coordinador:e.target.value.toUpperCase()})}/><button onClick={()=>setMNC(false)} className="bg-red-100 text-red-700 px-3 rounded font-black">X</button></> : <><select className="flex-1 p-3 border-2 rounded font-bold" value={form.coordinador} onChange={e=>setForm({...form, coordinador:e.target.value})}><option value="">Selec...</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><button onClick={()=>setMNC(true)} className="bg-slate-200 px-3 rounded font-black">+</button></>}</div></div><div><label className="text-[10px] font-bold text-gray-400 block mb-1">COLOR</label><select className="w-full p-3 rounded font-black text-white bg-slate-800" style={{backgroundColor: form.semaforo==='VERDE'?'#22c55e':form.semaforo==='AMARILLO'?'#eab308':'#ef4444'}} value={form.semaforo} onChange={e=>setForm({...form, semaforo:e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div></div>
-                        <button onClick={()=>{ 
-                            if(!form.cedula||!form.nombre)return alert("Datos incompletos"); 
-                            if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado"); 
-                            const d={...form, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()}; 
-                            push(ref(db,'votos_seguros'), d); 
-                            alert("Guardado correctamente"); 
-                            setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:""})); 
-                            setMNC(false); 
-                        }} className="w-full mt-6 bg-red-700 text-white py-4 rounded-xl font-black shadow-lg">GUARDAR REGISTRO</button>
+                        <button onClick={()=>{ import('firebase/database').then(({ push, ref }) => { if(!form.cedula||!form.nombre)return alert("Datos incompletos"); if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado"); const d={...form, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()}; push(ref(db,'votos_seguros'), d); alert("Guardado correctamente"); setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:""})); setMNC(false); }); }} className="w-full mt-6 bg-red-700 text-white py-4 rounded-xl font-black shadow-lg">GUARDAR REGISTRO</button>
                     </div>
                 )}
 
-                {/* 2. LISTA */}
                 {tab === "lista" && (
                     <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto animate-fade-in">
                         <div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
                         <table className="w-full text-left min-w-[600px]"><thead className="bg-red-50 text-red-900 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Día D</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y text-sm">
-                            {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{ const vot=yaVotaronGlobal[generarLlave(v.distrito,v.mesa,v.orden)]; return <tr key={v.id}><td className="p-3 font-bold">{v.nombre} {v.apellido}<br/><span className="text-xs text-gray-500">M:{v.mesa} | C.I:{v.cedula}</span></td><td className="p-3">{vot?<span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {vot.hora}</span>:'-'}</td><td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, null)} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td></tr>})}
+                            {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{ const vot=yaVotaronGlobal[generarLlave(v.distrito,v.mesa,v.orden)]; return <tr key={v.id}><td className="p-3 font-bold">{v.nombre} {v.apellido}<br/><span className="text-xs text-gray-500">M:{v.mesa} | C.I:{v.cedula}</span></td><td className="p-3">{vot?<span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {vot.hora}</span>:'-'}</td><td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[v.concejal])} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td></tr>})}
                         </tbody></table>{misV.length>lim && <button onClick={()=>setLim(l=>l+50)} className="w-full p-4 bg-slate-100 font-bold text-slate-600 mt-4 rounded-xl">Cargar más...</button>}
                     </div>
                 )}
 
-                {/* 3. DÍA D BUSCADOR (CON BOTÓN PASO PC) */}
                 {tab === "dia_d_buscador" && (
                     <div className="animate-fade-in max-w-2xl mx-auto">
                         <div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-t-red-600">
@@ -510,7 +591,7 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                                     
                                     <div className="mt-4 border-t pt-4">
                                         <button onClick={() => marcarPasoPCConcejal(generarLlave(resDiaD.distrito, resDiaD.mesa, resDiaD.orden), resDiaD.pc)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${resDiaD.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
-                                            {resDiaD.pc ? <>📍 YA PASÓ POR PC ({resDiaD.pc.hora}) - Por: {resDiaD.pc.registradoPorNombre || "Dirigente"}</> : <>⏳ MARCAR "PASÓ POR PC"</>}
+                                            {resDiaD.pc ? <>📍 YA PASÓ POR PC ({resDiaD.pc.hora})</> : <>⏳ MARCAR "PASÓ POR PC"</>}
                                         </button>
                                     </div>
                                     
@@ -525,7 +606,6 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                     </div>
                 )}
 
-                {/* 4. PROYECCIONES */}
                 {tab === "proyecciones" && (
                     <div className="bg-white p-10 rounded-2xl shadow border-t-4 border-t-red-600 animate-fade-in text-center max-w-2xl mx-auto">
                         <BarChart3 size={64} className="mx-auto text-slate-300 mb-4"/>
@@ -534,7 +614,6 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                     </div>
                 )}
 
-                {/* 5. LIVE (SOLO FEED) */}
                 {tab === "live" && (
                     <div className="space-y-6 animate-fade-in">
                         <div className="bg-white p-6 rounded-2xl shadow border border-t-4 border-t-red-600">
@@ -558,7 +637,6 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                     </div>
                 )}
 
-                {/* 6. MIS DIRIGENTES */}
                 {tab === "dirigentes" && (
                     <div className="animate-fade-in max-w-2xl mx-auto">
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
@@ -567,14 +645,16 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                                 <input type="number" placeholder="N° de Cédula" className="w-full md:w-1/3 p-3 border-2 border-slate-200 rounded-xl font-bold outline-none" value={formDirigente.cedula} onChange={e=>setFormDirigente({...formDirigente, cedula: e.target.value})} />
                                 <input type="text" placeholder="Nombre completo" className="w-full md:w-full p-3 border-2 border-slate-200 rounded-xl font-bold outline-none uppercase" value={formDirigente.nombre} onChange={e=>setFormDirigente({...formDirigente, nombre: e.target.value})} />
                                 <button onClick={() => { 
-                                    if(!formDirigente.cedula || !formDirigente.nombre) return alert("Faltan datos"); 
-                                    const nodoDirigente = miNom.replace(/[^a-zA-Z0-9]/g, '_'); 
-                                    set(ref(db, `dia_d/dirigentes_concejal/${nodoDirigente}/${formDirigente.cedula}`), { 
-                                        nombre: formDirigente.nombre.toUpperCase(), 
-                                        fechaAsignacion: new Date().toLocaleDateString() 
-                                    }); 
-                                    alert("Dirigente asignado"); 
-                                    setFormDirigente({cedula: "", nombre: ""}); 
+                                    import('firebase/database').then(({ set, ref }) => {
+                                        if(!formDirigente.cedula || !formDirigente.nombre) return alert("Faltan datos"); 
+                                        const nodoDirigente = miNom.replace(/[^a-zA-Z0-9]/g, '_'); 
+                                        set(ref(db, `dia_d/dirigentes_concejal/${nodoDirigente}/${formDirigente.cedula}`), { 
+                                            nombre: formDirigente.nombre.toUpperCase(), 
+                                            fechaAsignacion: new Date().toLocaleDateString() 
+                                        }); 
+                                        alert("Dirigente asignado"); 
+                                        setFormDirigente({cedula: "", nombre: ""}); 
+                                    });
                                 }} className="bg-slate-900 text-white font-black px-6 py-3 rounded-xl hover:bg-slate-800 shrink-0">AÑADIR</button>
                             </div>
                         </div>
@@ -592,12 +672,21 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const [distritoFiltroMaster, setDistritoFiltroMaster] = useState(esMaster ? "TODOS" : perfil.distrito);
-     const [activeTab, setActiveTab] = useState("registro");
+    const [activeTab, setActiveTab] = useState("registro");
     const [menuAbierto, setMenuAbierto] = useState(false);
     const [concejalEnDetalle, setConcejalEnDetalle] = useState(null);
     const [mesaEnDetalle, setMesaEnDetalle] = useState(null);
     const [filtroTexto, setFiltroTexto] = useState(""); 
     
+    const dataConfigBruta = distritoFiltroMaster === "TODOS" ? {} : (configuracionDepartamental[distritoFiltroMaster] || {});
+    const configApp = { 
+        intendente: typeof dataConfigBruta.intendente === 'string' ? dataConfigBruta.intendente : "NO CONFIGURADO", 
+        lista: dataConfigBruta.lista || "0", 
+        meta_intendente: dataConfigBruta.meta_intendente || 5000, 
+        meta_concejales: dataConfigBruta.meta_concejales || 500, 
+        concejales: Array.isArray(dataConfigBruta.concejales) ? dataConfigBruta.concejales : [] 
+    };
+
     const votosFiltrados = useMemo(() => {
         return distritoFiltroMaster === "TODOS" 
             ? (votosSeguros || []) 
@@ -622,6 +711,21 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     const totalVotosEmitidosDiaD = Object.keys(yaVotaronFiltrados || {}).length;
     const participacionIndependiente = totalVotosEmitidosDiaD - yaVotaronSeguros;
 
+    const escrutinioDistrito = Object.entries(escrutinioGlobal || {}).filter(([k]) => k.startsWith(`${distritoFiltroMaster}_`));
+    let totalIntendenteEscrutinio = 0;
+    let totalConcejalesEscrutinio = 0;
+
+    escrutinioDistrito.forEach(([_, acta]) => {
+        totalIntendenteEscrutinio += parseInt(acta.intendente) || 0;
+        Object.values(acta.concejales || {}).forEach(votos => {
+            totalConcejalesEscrutinio += parseInt(votos) || 0;
+        });
+    });
+    
+    const diferenciaCruzado = totalIntendenteEscrutinio - totalConcejalesEscrutinio;
+    const porcentajeSegurosIntendente = configApp.meta_intendente > 0 ? Math.round((totalVotosSeguros / configApp.meta_intendente) * 100) : 0;
+    const porcentajeEfectividadEquipo = totalVotosSeguros > 0 ? Math.round((yaVotaronSeguros / totalVotosSeguros) * 100) : 0;
+
     const rankingPasoPC = {};
     Object.values(pasoPCFiltrados || {}).forEach(check => {
         const nom = check.registradoPorNombre || "DESCONOCIDO";
@@ -638,15 +742,6 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
 
     const [busquedaNombre, setBusquedaNombre] = useState("");
     const [resultadosNombre, setResultadosNombre] = useState([]);
-
-    const dataConfigBruta = distritoFiltroMaster === "TODOS" ? {} : (configuracionDepartamental[distritoFiltroMaster] || {});
-    const configApp = { 
-        intendente: typeof dataConfigBruta.intendente === 'string' ? dataConfigBruta.intendente : "NO CONFIGURADO", 
-        lista: dataConfigBruta.lista || "0", 
-        meta_intendente: dataConfigBruta.meta_intendente || 5000, 
-        meta_concejales: dataConfigBruta.meta_concejales || 500, 
-        concejales: Array.isArray(dataConfigBruta.concejales) ? dataConfigBruta.concejales : [] 
-    };
 
     const [filtroConcejal, setFiltroConcejal] = useState("TODOS");
     const [filtroCoordinadorAdmin, setFiltroCoordinadorAdmin] = useState("TODOS");
@@ -740,7 +835,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
             setFormEscrutinioAdmin(dataGuardada);
         } else {
             const initConc = {}; configApp.concejales.forEach(c => initConc[c] = "");
-            setFormEscrutinioAdmin({ intendente: "", concejales: initConc });
+            setFormEscrutinioAdmin({ intendente: "", concejales: initConc, rivalesIntendente: [], rivalesConcejales: [], blancos: "", nulos: "" });
         }
     };
 
@@ -1177,6 +1272,38 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                 <div className="border-l-4 border-green-500 pl-4 bg-green-50 pr-4 py-1 rounded-r-lg"><div className="text-[10px] font-bold text-green-700 uppercase">Total Dispositivos</div><div className="text-2xl font-black text-green-600">{Object.values(usuariosOnline||{}).filter(u => u.distrito === distritoFiltroMaster).length}</div></div>
                             </div>
 
+                            <div className="bg-gradient-to-r from-red-900 to-red-700 p-6 rounded-3xl shadow-xl border border-red-600 text-white relative overflow-hidden">
+                                <Target size={150} className="absolute -right-10 -top-10 opacity-10"/>
+                                <h2 className="text-2xl font-black mb-1 flex items-center gap-2">INTENDENTE: {configApp.intendente}</h2>
+                                <div className="text-[10px] font-bold text-red-300 uppercase tracking-widest mb-6">Proyección, Trabajo de Equipo y Análisis de Voto Cruzado</div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+                                    <div className="bg-black/20 p-4 rounded-2xl border border-red-500/30 text-center flex flex-col justify-center">
+                                        <div className="text-[10px] text-red-200 font-bold uppercase mb-1">Meta Intendente</div>
+                                        <div className="text-3xl font-black">{configApp.meta_intendente || 0}</div>
+                                    </div>
+                                    <div className="bg-black/20 p-4 rounded-2xl border border-red-500/30 text-center flex flex-col justify-center">
+                                        <div className="text-[10px] text-red-200 font-bold uppercase mb-1">Intención (Total Equipo)</div>
+                                        <div className="text-3xl font-black text-blue-300">{totalVotosSeguros}</div>
+                                        <div className="text-[10px] mt-1 font-bold">{porcentajeSegurosIntendente}% de la meta</div>
+                                    </div>
+                                    <div className="bg-black/20 p-4 rounded-2xl border border-red-500/30 text-center flex flex-col justify-center">
+                                        <div className="text-[10px] text-red-200 font-bold uppercase mb-1">Votaron (Efectividad)</div>
+                                        <div className="text-3xl font-black text-green-400">{yaVotaronSeguros}</div>
+                                        <div className="text-[10px] mt-1 font-bold">{porcentajeEfectividadEquipo}% del equipo ya votó</div>
+                                    </div>
+                                    <div className={`p-4 rounded-2xl border text-center flex flex-col justify-center ${diferenciaCruzado >= 0 ? 'bg-green-900/40 border-green-500/50' : 'bg-red-950/80 border-red-400/50 shadow-inner'}`}>
+                                        <div className="text-[10px] text-gray-300 font-bold uppercase mb-1">Voto Cruzado (Escrutinio)</div>
+                                        <div className={`text-3xl font-black ${diferenciaCruzado > 0 ? 'text-green-400' : diferenciaCruzado < 0 ? 'text-red-400' : 'text-white'}`}>
+                                            {diferenciaCruzado > 0 ? `+${diferenciaCruzado}` : diferenciaCruzado}
+                                        </div>
+                                        <div className="text-[10px] mt-1 font-bold text-gray-400">
+                                            {diferenciaCruzado > 0 ? "Atrajo votos externos" : diferenciaCruzado < 0 ? "Fuga de votos del equipo" : "Empate exacto"}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-700 flex flex-col justify-center h-full">
                                     <h2 className="font-black text-xl text-white text-center mb-2">URNAS {distritoFiltroMaster}</h2>
@@ -1579,7 +1706,49 @@ return (
                                                     )
                                                 })}
                                             </div>
-                                            <button onClick={guardarEscrutinioAdmin} className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-black shadow transition-colors text-lg flex items-center justify-center gap-2 print:hidden"><Save/> GUARDAR / CORREGIR ACTA DE MESA</button>
+                                            
+                                            {/* RIVALES EN EL ADMIN */}
+                                            {formEscrutinioAdmin.rivalesIntendente && formEscrutinioAdmin.rivalesIntendente.length > 0 && (
+                                                <>
+                                                    <h4 className="font-black text-xl text-slate-800 mb-4 mt-8 border-t pt-4">INTENDENTES RIVALES</h4>
+                                                    <div className="space-y-2 mb-6">
+                                                        {formEscrutinioAdmin.rivalesIntendente.map((r, i) => (
+                                                            <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border shadow-sm print:shadow-none print:border-b">
+                                                                <span className="font-black text-sm uppercase">{r.nombre}</span>
+                                                                <span className="font-black text-xl text-slate-600">{r.votos} votos</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {formEscrutinioAdmin.rivalesConcejales && formEscrutinioAdmin.rivalesConcejales.length > 0 && (
+                                                <>
+                                                    <h4 className="font-black text-xl text-slate-800 mb-4 mt-8 border-t pt-4">CONCEJALES RIVALES</h4>
+                                                    <div className="space-y-2 mb-6">
+                                                        {formEscrutinioAdmin.rivalesConcejales.map((r, i) => (
+                                                            <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border shadow-sm print:shadow-none print:border-b">
+                                                                <span className="font-black text-sm uppercase">{r.nombre}</span>
+                                                                <span className="font-black text-xl text-slate-600">{r.votos} votos</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {/* BLANCOS Y NULOS EN ADMIN */}
+                                            <div className="grid grid-cols-2 gap-4 mt-8 border-t pt-6">
+                                                <div className="bg-gray-100 p-4 rounded-xl border text-center">
+                                                    <div className="text-[10px] font-bold text-gray-500 mb-1">VOTOS BLANCOS</div>
+                                                    <div className="text-2xl font-black text-gray-700">{formEscrutinioAdmin.blancos || 0}</div>
+                                                </div>
+                                                <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-center">
+                                                    <div className="text-[10px] font-bold text-red-500 mb-1">VOTOS NULOS</div>
+                                                    <div className="text-2xl font-black text-red-700">{formEscrutinioAdmin.nulos || 0}</div>
+                                                </div>
+                                            </div>
+
+                                            <button onClick={guardarEscrutinioAdmin} className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-black shadow transition-colors text-lg flex items-center justify-center gap-2 print:hidden mt-6"><Save/> GUARDAR / CORREGIR ACTA DE MESA</button>
                                         </div>
                                     </div>
                                 )}
