@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import './index.css';
 import { initializeApp, getApps } from "firebase/app";
-import { getDatabase, ref, push, onValue, get, set, remove, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
+import { getDatabase, ref, push, onValue, get, set, remove, update, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Eye, Camera, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, X, Calculator, TrendingUp, TrendingDown, ClipboardList, Globe, Edit2, UserPlus, ShieldAlert, Unlock, ChevronDown } from "lucide-react";
@@ -31,43 +31,35 @@ const DISTRITOS_CANINDEYU = [
 ];
 const NOMBRE_DEPARTAMENTO = "CANINDEYÚ";
 
-// --- DICCIONARIO DE FOTOS LOCALES ---
+// --- DICCIONARIO DE FOTOS LOCALES (Claves Normalizadas) ---
 const FOTOS_LOCALES_CONCEJALES = {
-  "1-FABIO PORTILLO": "/fotos/1-fabio_portillo.jpg",
-  "2- JULIO CABRERA": "/fotos/2- julio_cabrera.jpg",
-  "3- JOEL VILLASANTI": "/fotos/3-joel_villasanti.jpg",
-  "4-ELENO VERON": "/fotos/4-eleno_verón.jpg",
-  "5- GLADYS SANTANDER": "/fotos/5-gladys_santander.jpg",
-  "6- EDGAR MONZON": "/fotos/6-edgar_verón.jpg",
-  "7- MARCELINO GONZALEZ": "/fotos/7-marcelino_gonzález.jpg",
-  "8- ISMAEL FERNANDEZ": "/fotos/8-ismael_fernández.jpg",
-  "9- LUZ MABEL R.": "/fotos/9-luz_mabel_r.jpg" 
+  "FABIOPORTILLO": "/fotos/1-fabio_portillo.jpg",
+  "JULIOCABRERA": "/fotos/2- julio_cabrera.jpg",
+  "JOELVILLASANTI": "/fotos/3-joel_villasanti.jpg",
+  "ELENOVERON": "/fotos/4-eleno_verón.jpg",
+  "GLADYSSANTANDER": "/fotos/5-gladys_santander.jpg",
+  "EDGARMONZON": "/fotos/6-edgar_verón.jpg",
+  "MARCELINOGONZALEZ": "/fotos/7-marcelino_gonzález.jpg",
+  "ISMAELFERNANDEZ": "/fotos/8-ismael_fernández.jpg",
+  "LUZMABELR": "/fotos/9-luz_mabel_r.jpg" 
 };
 
 // --- HERRAMIENTAS GLOBALES ---
 const generarLlave = (distrito, mesa, orden) => `${distrito}_${mesa}_${orden}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
 const generarLlaveMesa = (distrito, mesa) => `${distrito}_${mesa}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
 
-// NUEVO: Función INTELIGENTE para emparejar nombres de concejales aunque cambien de lista o número
-const extraerNombrePuro = (str) => {
+const normalizarNombre = (str) => {
     if (!str) return "";
-    let s = str.toUpperCase();
-    if (s.includes(' - ')) s = s.split(' - ').slice(1).join(' - '); // Quita el "LISTA 16 -"
-    s = s.replace(/^[0-9\s-]+/, ''); // Quita prefijos numéricos iniciales como "1- "
-    return s.replace(/\s+/g, ''); // Quita todos los espacios
+    return String(str).toUpperCase()
+              .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+              .replace(/LISTA/g, '') 
+              .replace(/[0-9]/g, '') 
+              .replace(/[^A-Z]/g, ''); 
 };
 
 const concejalCoincide = (votoConcejal, configConcejal) => {
     if (!votoConcejal || !configConcejal) return false;
-    if (votoConcejal === configConcejal) return true;
-    
-    const puroVoto = extraerNombrePuro(votoConcejal);
-    const puroConfig = extraerNombrePuro(configConcejal);
-    
-    if (puroVoto && puroConfig && puroVoto === puroConfig) return true;
-    if (puroVoto.length > 5 && puroConfig.length > 5 && (puroVoto.includes(puroConfig) || puroConfig.includes(puroVoto))) return true;
-    
-    return false;
+    return normalizarNombre(votoConcejal) === normalizarNombre(configConcejal);
 };
 
 const enviarWhatsAppCarnet = (v) => {
@@ -80,7 +72,7 @@ const enviarWhatsAppCarnet = (v) => {
 
 const imprimirCarnetFisico = (v, fotoBaseConcejal) => {
     const vent = window.open('', '_blank');
-    vent.document.write(`<html><head><title>Carnet Electoral</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#eee}@media print{body{background:white}.carnet{box-shadow:none;border:2px solid #991e1e}}.carnet{width:6cm;height:9cm;background:white;border:2px solid #991e1e;border-radius:12px;padding:12px;box-shadow:0 5px 10px rgba(0,0,0,0.2);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;position:relative}.img-base{position:absolute;top:0;left:0;width:100%;height:3.5cm;object-fit:cover;z-index:1;opacity:0.15}.header{background:#991e1e;color:white;text-align:center;padding:8px;font-weight:bold;font-size:16px;border-radius:6px;z-index:10;position:relative}.concej-nombre{font-size:10px;text-transform:uppercase;color:#ffcccc;margin-top:2px}.datos{font-size:12px;line-height:1.5;margin-top:15px;z-index:10;position:relative}.dato-tit{color:#888;font-size:10px;margin-bottom:-5px;font-weight:bold;text-transform:uppercase}.dato-val{font-weight:900;font-size:15px;color:#111;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:2px}.footer{text-align:center;font-size:11px;color:white;background:#1e293b;padding:6px;border-radius:6px;font-weight:bold;z-index:10;position:relative}</style></head><body><div class="carnet">${fotoBaseConcejal?`<img src="${fotoBaseConcejal}" class="img-base"/>`:''}<div class="header">CARNET OFICIAL<div class="concej-nombre">Candidato: ${v.concejal}</div></div><div class="datos"><div class="dato-tit">CÉDULA</div><div class="dato-val">${v.cedula}</div><div class="dato-tit">ELECTOR</div><div class="dato-val">${v.nombre} ${v.apellido}</div><div class="dato-tit">LOCAL</div><div class="dato-val" style="font-size:13px;line-height:1.2">${v.local}</div><div style="display:flex;justify-content:space-between;margin-top:15px;border-top:2px solid #eee;padding-top:10px"><div><div class="dato-tit">MESA</div><div class="dato-val" style="font-size:28px;color:#991e1e;border:none;padding:0">${v.mesa}</div></div><div style="text-align:right"><div class="dato-tit">ORDEN</div><div class="dato-val" style="font-size:28px;color:#991e1e;border:none;padding:0">${v.orden}</div></div></div></div><div class="footer">Válido para Día D</div></div><script>window.print();setTimeout(()=>window.close(),500);</script></body></html>`);
+    vent.document.write(`<html><head><title>Carnet Electoral</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#eee}@media print{body{background:white}.carnet{box-shadow:none;border:2px solid #991e1e}}.carnet{width:6cm;height:9cm;background:white;border:2px solid #991e1e;border-radius:12px;padding:12px;box-shadow:0 5px 10px rgba(0,0,0,0.2);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;position:relative}.img-base{position:absolute;top:0;left:0;width:100%;height:3.5cm;object-fit:cover;z-index:1;opacity:0.15}.header{background:#991e1e;color:white;text-align:center;padding:8px;font-weight:bold;font-size:16px;border-radius:6px;z-index:10;position:relative}.concej-nombre{font-size:10px;text-transform:uppercase;color:#ffcccc;margin-top:2px}.datos{font-size:12px;line-height:1.5;margin-top:15px;z-index:10;position:relative}.dato-tit{color:#888;font-size:10px;margin-bottom:-5px;font-weight:bold;text-transform:uppercase}.dato-val{font-weight:900;font-size:15px;color:#111;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:2px}.footer{text-align:center;font-size:11px;color:white;background:#1e293b;padding:6px;border-radius:6px;font-weight:bold;z-index:10;position:relative}</style></head><body><div class="carnet">${fotoBaseConcejal?`<img src="${fotoBaseConcejal}" class="img-base"/>`:''}<div class="header">CARNET OFICIAL<div class="concej-nombre">Candidato: ${v.concejal || 'SIN ASIGNAR'}</div></div><div class="datos"><div class="dato-tit">CÉDULA</div><div class="dato-val">${v.cedula}</div><div class="dato-tit">ELECTOR</div><div class="dato-val">${v.nombre} ${v.apellido}</div><div class="dato-tit">LOCAL</div><div class="dato-val" style="font-size:13px;line-height:1.2">${v.local}</div><div style="display:flex;justify-content:space-between;margin-top:15px;border-top:2px solid #eee;padding-top:10px"><div><div class="dato-tit">MESA</div><div class="dato-val" style="font-size:28px;color:#991e1e;border:none;padding:0">${v.mesa}</div></div><div style="text-align:right"><div class="dato-tit">ORDEN</div><div class="dato-val" style="font-size:28px;color:#991e1e;border:none;padding:0">${v.orden}</div></div></div></div><div class="footer">Válido para Día D</div></div><script>window.print();setTimeout(()=>window.close(),500);</script></body></html>`);
     vent.document.close();
 };
 
@@ -268,12 +260,11 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
         if(!f) return; 
         setSubiendo(n); 
         try { 
-            const nombreLimpio = n.includes(' - ') ? n.split(' - ')[1].trim() : n.trim();
-            const r = storageRef(storage, `fotos/${nombreLimpio.replace(/[^a-zA-Z0-9]/g, '_')}`); 
+            const nombreNormalizado = normalizarNombre(n);
+            const r = storageRef(storage, `fotos/${nombreNormalizado}`); 
             await uploadBytes(r, f); 
             const url = await getDownloadURL(r);
-            await set(ref(db, `concejales_fotos/${n}`), url); 
-            await set(ref(db, `concejales_fotos/${nombreLimpio}`), url); 
+            await set(ref(db, `concejales_fotos/${nombreNormalizado}`), url); 
             alert("✅ Foto lista y guardada en la nube."); 
         } catch(err) { 
             alert("Error al subir foto: " + err.message); 
@@ -295,7 +286,7 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
             
             <div className="bg-slate-50 p-6 rounded-2xl border">
                 <h3 className="font-black mb-2 text-slate-800">CONCEJALES (EQUIPOS Y LISTAS)</h3>
-                <p className="text-xs font-bold text-gray-500 mb-4">Para agrupar concejales en sub-listas, coloca el nombre de la lista en la primera casilla. Si ya creaste al concejal sin lista, dale al botón azul de Editar (lápiz) y cámbiale el nombre (Ej: "16 - FABIO PORTILLO"). Para subir su foto, presiona la cámara.</p>
+                <p className="text-xs font-bold text-gray-500 mb-4">Para agrupar concejales en sub-listas, coloca el nombre de la lista en la primera casilla. Si ya creaste al concejal sin lista, dale al botón azul de Editar (lápiz) y cámbiale el nombre (Ej: "16 - 1-FABIO PORTILLO"). Para subir su foto, presiona la cámara.</p>
                 <div className="flex gap-2 mb-6">
                     <input type="text" placeholder="LETRA LISTA (Ej: 16A)" id="inSub" className="w-1/4 p-3 border rounded-xl uppercase font-bold outline-none focus:border-red-500"/>
                     <input type="text" placeholder="NOMBRE CONCEJAL..." value={nConc} onChange={e=>setNConc(e.target.value)} className="flex-1 p-3 border rounded-xl uppercase font-bold outline-none focus:border-red-500"/>
@@ -342,6 +333,7 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
 // ==============================================================================================
 // 3. APPS POR ROL (VEEDOR, CONCEJAL, DIRIGENTE)
 // ==============================================================================================
+
 function AppVeedor({ padronGlobal, yaVotaronGlobal, mesasCerradas, asignacionesVeedores, escrutinioGlobal, configApp, auth, db }) {
     const [vs, setVs] = useState(null); 
     const [ciIn, setCiIn] = useState(""); 
@@ -429,10 +421,10 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
 
     // FILTRADO INTELIGENTE: El concejal verá sus votos sin importar si le cambiaron el nombre o número de lista.
     const misV = useMemo(() => {
-        return votosSeguros.filter(v => v.distrito === perfil.distrito && concejalCoincide(v.concejal, miNom));
-    }, [votosSeguros, perfil.distrito, miNom]);
+        return votosSeguros.filter(v => v.distrito === perfil.distrito && (concejalCoincide(v.concejal, miNom) || v.registradoPor === usuarioActivo.email));
+    }, [votosSeguros, perfil.distrito, miNom, usuarioActivo.email]);
 
-    // DETECCIÓN DE DUPLICADOS PARA EL CONCEJAL (Para avisarle si su votante fue registrado por otro)
+    // DETECCIÓN DE DUPLICADOS PARA EL CONCEJAL
     const cedulasDuplicadas = useMemo(() => {
         const counts = {};
         votosSeguros.filter(v => v.distrito === perfil.distrito).forEach(v => { counts[v.cedula] = (counts[v.cedula] || 0) + 1; });
@@ -589,13 +581,14 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                                             <span className="text-xs text-gray-500">M:{v.mesa} | C.I:{v.cedula} | <span className={`text-${semaforoReal === 'VERDE' ? 'green' : semaforoReal === 'AMARILLO' ? 'yellow' : 'red'}-500 text-lg leading-none`}>●</span></span>
                                         </td>
                                         <td className="p-3">{vot?<span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {vot.hora}</span>:'-'}</td>
-                                        <td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[v.concejal] || FOTOS_LOCALES_CONCEJALES[extraerNombrePuro(v.concejal)])} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td>
+                                        <td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[normalizarNombre(v.concejal)])} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td>
                                     </tr>
                                 )})}
                         </tbody></table>{misV.length>lim && <button onClick={()=>setLim(l=>l+50)} className="w-full p-4 bg-slate-100 font-bold text-slate-600 mt-4 rounded-xl">Cargar más...</button>}
                     </div>
                 )}
 
+                {/* ... Otras pestañas de Concejal igual ... */}
                 {tab === "dia_d_buscador" && (
                     <div className="animate-fade-in max-w-2xl mx-auto">
                         <div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-t-red-600">
@@ -644,8 +637,6 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
                         </div>
                     </div>
                 )}
-
-                {/* ... Otras pestañas Concejal intactas ... */}
             </main>
         </div>
     );
@@ -664,6 +655,10 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     const [mesaEnDetalle, setMesaEnDetalle] = useState(null);
     const [filtroTexto, setFiltroTexto] = useState(""); 
     
+    // NUEVO: Estado para el Lápiz de Edición de Voto
+    const [editandoVotoId, setEditandoVotoId] = useState(null);
+    const [formEdicion, setFormEdicion] = useState({ concejal: "", coordinador: "", semaforo: "" });
+
     const dataConfigBruta = distritoFiltroMaster === "TODOS" ? {} : (configuracionDepartamental[distritoFiltroMaster] || {});
     const configApp = { 
         intendente: typeof dataConfigBruta.intendente === 'string' ? dataConfigBruta.intendente : "NO CONFIGURADO", 
@@ -785,6 +780,50 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
         setResultadosNombre([]);
         setBusquedaNombre("");
     }, [distritoFiltroMaster]);
+
+    // FUNCIONES DEL LÁPIZ DE EDICIÓN
+    const guardarEdicionVoto = () => {
+        if (!editandoVotoId) return;
+        import('firebase/database').then(({ update, ref }) => {
+            update(ref(db, `votos_seguros/${editandoVotoId}`), {
+                concejal: formEdicion.concejal,
+                coordinador: formEdicion.coordinador.toUpperCase(),
+                semaforo: formEdicion.semaforo
+            }).then(() => {
+                alert("✅ Voto actualizado correctamente.");
+                setEditandoVotoId(null);
+            }).catch(e => alert("Error: " + e.message));
+        });
+    };
+
+    // BOTÓN MÁGICO: AUTO-CORREGIR HUÉRFANOS
+    const autoCorregirVotos = () => {
+        if(!window.confirm("¿Estás seguro de Auto-Asignar los votos 'SIN ASIGNAR' revisando qué correo los registró?")) return;
+        
+        const updates = {};
+        let corregidos = 0;
+        const usuariosArr = Object.values(usuariosRegistrados);
+
+        votosFiltrados.forEach(v => {
+            if (!v.concejal || v.concejal === "SIN ASIGNAR") {
+                const usuarioCreador = usuariosArr.find(u => u.email === v.registradoPor);
+                if (usuarioCreador && usuarioCreador.rol === 'concejal' && usuarioCreador.nombre_oficial) {
+                    updates[`votos_seguros/${v.id}/concejal`] = usuarioCreador.nombre_oficial;
+                    corregidos++;
+                }
+            }
+        });
+
+        if (corregidos > 0) {
+            import('firebase/database').then(({ update, ref }) => {
+                update(ref(db), updates).then(() => {
+                    alert(`✅ ¡Éxito! Se detectaron y asignaron correctamente ${corregidos} votos huérfanos a sus respectivos concejales.`);
+                }).catch(e => alert("Error al guardar: " + e.message));
+            });
+        } else {
+            alert("No se encontraron votos huérfanos que coincidan con el correo de un concejal configurado.");
+        }
+    };
 
     const buscarCedulaAdmin = () => { const p = (padronGlobal||{})[form.cedula]; if (p) setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); else alert("No encontrada."); };
     
@@ -1108,7 +1147,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="TELÉFONO" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} /><input type="text" readOnly placeholder="DISTRITO" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.distrito} /></div>
                     <div className="grid grid-cols-3 gap-2 mb-4"><input type="text" readOnly className="p-3 border bg-gray-50 text-xs col-span-3 md:col-span-1" value={form.local} placeholder="LOCAL" /><input type="text" readOnly className="p-3 border bg-gray-50 font-bold" value={form.mesa ? `MESA ${form.mesa}` : "MESA"} /><input type="text" readOnly className="p-3 border-2 border-red-100 font-black text-red-600 bg-red-50" value={form.orden ? `ORDEN ${form.orden}` : "ORDEN"} /></div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">CONCEJAL</label><select className="p-4 border-2 rounded-xl font-bold outline-none" value={form.concejal} onChange={e=>setForm({...form, concejal: e.target.value})}><option>SIN ASIGNAR</option>{configApp.concejales.map(c => <option key={c} value={c}>{c.includes(' - ') ? c.split(' - ')[1] : c}</option>)}</select></div>
+                        <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">CONCEJAL</label><select className="p-4 border-2 rounded-xl font-bold outline-none" value={form.concejal} onChange={e=>setForm({...form, concejal: e.target.value})}><option value="SIN ASIGNAR">SIN ASIGNAR</option>{configApp.concejales.map(c => <option key={c} value={c}>{c.includes(' - ') ? c.split(' - ')[1] : c}</option>)}</select></div>
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COORDINADOR</label>
                             <div className="flex gap-2">
                                 {!modoNuevoCoord ? (
@@ -1133,7 +1172,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                             String(v.nombre || "").toLowerCase().includes(texto) || 
                             String(v.apellido || "").toLowerCase().includes(texto);
                         
-                        const cumpleConcejal = filtroConcejal === "TODOS" || v.concejal === filtroConcejal;
+                        const cumpleConcejal = filtroConcejal === "TODOS" || concejalCoincide(v.concejal, filtroConcejal);
                         const cumpleCoord = filtroCoordinadorAdmin === "TODOS" || v.coordinador === filtroCoordinadorAdmin;
                         const cumpleColor = filtroSemaforoAdmin === "TODOS" || v.semaforo === filtroSemaforoAdmin;
 
@@ -1141,15 +1180,23 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     });
 
                     return (
-                    <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto print:hidden animate-fade-in">
-                        <div className="flex flex-col md:flex-row gap-4 mb-4">
-                            <input type="text" placeholder="BUSCAR CÉDULA/NOMBRE" className="p-2 border rounded font-bold uppercase flex-1" value={filtroTexto} onChange={e=>{setFiltroTexto(e.target.value); setLimiteListaAdmin(100);}}/>
-                            <select className="p-2 border rounded font-bold text-sm" value={filtroConcejal} onChange={e=>{setFiltroConcejal(e.target.value); setLimiteListaAdmin(100);}}><option value="TODOS">CONCEJAL: TODOS</option>{configApp.concejales.map(c=><option key={c} value={c}>{c.includes(' - ') ? c.split(' - ')[1] : c}</option>)}<option value="SIN ASIGNAR">SIN ASIGNAR</option></select>
-                            <select className="p-2 border rounded font-bold text-sm" value={filtroCoordinadorAdmin} onChange={e=>{setFiltroCoordinadorAdmin(e.target.value); setLimiteListaAdmin(100);}}><option value="TODOS">COORD: TODOS</option>{coordinadoresUnicos.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                            <select className="p-2 border rounded font-bold text-sm" value={filtroSemaforoAdmin} onChange={e=>{setFiltroSemaforoAdmin(e.target.value); setLimiteListaAdmin(100);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select>
+                    <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto print:hidden animate-fade-in relative">
+                        <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">
+                            <input type="text" placeholder="BUSCAR CÉDULA/NOMBRE" className="p-2 border rounded font-bold uppercase flex-1 w-full" value={filtroTexto} onChange={e=>{setFiltroTexto(e.target.value); setLimiteListaAdmin(100);}}/>
+                            <select className="p-2 border rounded font-bold text-sm w-full md:w-auto" value={filtroConcejal} onChange={e=>{setFiltroConcejal(e.target.value); setLimiteListaAdmin(100);}}>
+                                <option value="TODOS">CONCEJAL: TODOS</option>
+                                {configApp.concejales.map(c=><option key={c} value={c}>{c.includes(' - ') ? c.split(' - ')[1] : c}</option>)}
+                                <option value="SIN ASIGNAR">SIN ASIGNAR</option>
+                            </select>
+                            <select className="p-2 border rounded font-bold text-sm w-full md:w-auto" value={filtroCoordinadorAdmin} onChange={e=>{setFiltroCoordinadorAdmin(e.target.value); setLimiteListaAdmin(100);}}><option value="TODOS">COORD: TODOS</option>{coordinadoresUnicos.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                            <select className="p-2 border rounded font-bold text-sm w-full md:w-auto" value={filtroSemaforoAdmin} onChange={e=>{setFiltroSemaforoAdmin(e.target.value); setLimiteListaAdmin(100);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select>
+                            
+                            {/* BOTÓN AUTO-CORREGIR HUÉRFANOS */}
+                            {esMaster && <button onClick={autoCorregirVotos} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl font-black flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md" title="Asigna los votos SIN ASIGNAR al concejal que los creó"><RefreshCw size={18}/> AUTO-CORREGIR HUÉRFANOS</button>}
+                            
                             {esMaster && <button onClick={exportarExcel} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-black flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md"><Download size={18}/> EXPORTAR EXCEL</button>}
                             
-                            {/* INDICADOR DE DUPLICADOS EN LA LISTA DEL SUPER ADMIN */}
+                            {/* INDICADOR DE DUPLICADOS */}
                             {cedulasDuplicadas.size > 0 && (
                                 <span className="bg-red-100 border border-red-300 text-red-700 px-4 py-2 rounded-xl font-black flex items-center justify-center gap-2 shrink-0 animate-pulse shadow-sm">
                                     <AlertTriangle size={18}/> {cedulasDuplicadas.size} DUPLICADOS
@@ -1175,8 +1222,9 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                     </td>
                                     <td className="p-3 text-xs font-bold">{v.distrito}<br/>M: {v.mesa} | O: {v.orden}</td>
                                     <td className="p-3 text-xs font-bold text-slate-800 uppercase">
-                                        ⭐ {v.concejal?.includes(' - ') ? v.concejal.split(' - ')[1] : v.concejal}
-                                        <div className="text-[9px] text-gray-500 mt-1">COORD: {v.coordinador || '-'}</div>
+                                        ⭐ {v.concejal && v.concejal !== "SIN ASIGNAR" ? (v.concejal.includes(' - ') ? v.concejal.split(' - ')[1] : v.concejal) : 'SIN ASIGNAR'}
+                                        <div className="text-[9px] text-gray-500 mt-1" title="Correo del usuario que subió este voto">👤 USUARIO: {v.registradoPor || '-'}</div>
+                                        <div className="text-[9px] text-gray-500 mt-0.5">COORD: {v.coordinador || '-'}</div>
                                     </td>
                                     <td className="p-3">
                                         {yaVotaronFiltrados[llave] ? <span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {yaVotaronFiltrados[llave].hora}</span> : <span className="bg-gray-100 text-gray-400 text-[10px] font-bold px-2 py-1 rounded">PENDIENTE</span>}
@@ -1185,8 +1233,21 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                     <td className="p-3">
                                         <div className="flex justify-center items-center gap-3">
                                             <button onClick={()=>enviarWhatsAppCarnet(v)} className="text-green-500 hover:text-green-700"><Send size={16}/></button>
-                                            <button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[v.concejal] || FOTOS_LOCALES_CONCEJALES[extraerNombrePuro(v.concejal)])} className="text-slate-700 hover:text-black"><Printer size={16}/></button>
-                                            <button onClick={()=>eliminarVoto(v.id)} className="text-red-300 hover:text-red-600 ml-2 border-l pl-2"><Trash2 size={16}/></button>
+                                            <button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[normalizarNombre(v.concejal)])} className="text-slate-700 hover:text-black"><Printer size={16}/></button>
+                                            
+                                            {/* BOTÓN LÁPIZ DE EDICIÓN */}
+                                            <button onClick={()=>{
+                                                setEditandoVotoId(v.id);
+                                                setFormEdicion({ 
+                                                    concejal: v.concejal || "SIN ASIGNAR", 
+                                                    coordinador: v.coordinador || "",
+                                                    semaforo: v.semaforo || "VERDE"
+                                                });
+                                            }} className="text-blue-500 hover:text-blue-700 ml-2 border-l pl-2" title="Editar Asignación de Voto">
+                                                <Edit2 size={16}/>
+                                            </button>
+
+                                            <button onClick={()=>eliminarVoto(v.id)} className="text-red-400 hover:text-red-700 border-l pl-2"><Trash2 size={16}/></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -1199,6 +1260,43 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                             <button onClick={() => setLimiteListaAdmin(prev => prev + 100)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 p-4 font-bold mt-4 rounded-xl transition-colors">
                                 Cargar más registros... ({listaMostrar.length - limiteListaAdmin} restantes)
                             </button>
+                        )}
+
+                        {/* MODAL DE EDICIÓN DE VOTO */}
+                        {editandoVotoId && (
+                            <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                                <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-blue-600 animate-fade-in">
+                                    <h3 className="font-black text-xl mb-4 text-slate-800">EDITAR VOTO</h3>
+                                    <p className="text-xs text-slate-500 font-bold mb-6">Modifica a qué equipo o color pertenece esta persona.</p>
+                                    
+                                    <div className="space-y-4 mb-6">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 block mb-1">ASIGNAR AL CONCEJAL</label>
+                                            <select className="w-full p-3 border-2 rounded-xl font-bold outline-none uppercase" value={formEdicion.concejal} onChange={e=>setFormEdicion({...formEdicion, concejal: e.target.value})}>
+                                                <option value="SIN ASIGNAR">SIN ASIGNAR</option>
+                                                {configApp.concejales.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 block mb-1">COORDINADOR</label>
+                                            <input type="text" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none" value={formEdicion.coordinador} onChange={e=>setFormEdicion({...formEdicion, coordinador: e.target.value})} placeholder="Ej: JUAN PEREZ"/>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 block mb-1">COLOR (ESTADO)</label>
+                                            <select className={`w-full p-3 border-2 rounded-xl font-black text-white outline-none ${formEdicion.semaforo==='VERDE'?'bg-green-500':formEdicion.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={formEdicion.semaforo} onChange={e=>setFormEdicion({...formEdicion, semaforo: e.target.value})}>
+                                                <option value="VERDE">🟢 VERDE</option>
+                                                <option value="AMARILLO">🟡 AMARILLO</option>
+                                                <option value="ROJO">🔴 ROJO</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex gap-3">
+                                        <button onClick={guardarEdicionVoto} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-black hover:bg-blue-700 shadow-md">GUARDAR</button>
+                                        <button onClick={()=>setEditandoVotoId(null)} className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-xl font-black hover:bg-slate-300">CANCELAR</button>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                     )
@@ -1224,10 +1322,10 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                             {grupo.map(v => (
                                                 <div key={v.id} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm relative">
-                                                    <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Cargado por:</div>
-                                                    <div className="font-black text-slate-700">{v.concejal}</div>
-                                                    <div className="text-xs text-gray-500 font-bold mt-1">Coord: {v.coordinador || '-'}</div>
-                                                    <button onClick={()=>eliminarVoto(v.id)} className="absolute top-2 right-2 text-red-300 hover:text-red-600" title="Eliminar"><Trash2 size={16}/></button>
+                                                    <div className="text-[10px] text-gray-400 font-bold uppercase mb-1">Cargado por el Concejal:</div>
+                                                    <div className="font-black text-slate-700 uppercase">{v.concejal || "SIN ASIGNAR"}</div>
+                                                    <div className="text-[10px] text-gray-500 font-bold mt-1 uppercase bg-slate-100 p-1 rounded inline-block truncate max-w-[90%]" title={v.registradoPor}>👤 USUARIO: {v.registradoPor || "-"}</div>
+                                                    <button onClick={()=>eliminarVoto(v.id)} className="absolute top-2 right-2 text-red-300 hover:text-red-600" title="Eliminar este duplicado"><Trash2 size={16}/></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -1372,15 +1470,16 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                                     const amarilloC = votosDeEsteConcejal.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'AMARILLO').length;
                                                     const rojoC = votosDeEsteConcejal.filter(v => cedulasDuplicadas.has(v.cedula) || v.semaforo === 'ROJO').length;
 
-                                                    // EXTRACCIÓN DE FOTOS (Por nombre puro o nombre crudo)
-                                                    const nombreLimpio = c.includes(' - ') ? c.split(' - ')[1].trim() : c.trim();
-                                                    const nombrePuro = extraerNombrePuro(c);
-                                                    
-                                                    const fotoFirebase = fotosConcejales[c] || fotosConcejales[nombreLimpio] || fotosConcejales[nombrePuro];
-                                                    const fotoLocal = FOTOS_LOCALES_CONCEJALES[c] || FOTOS_LOCALES_CONCEJALES[nombreLimpio] || FOTOS_LOCALES_CONCEJALES[nombrePuro];
+                                                    // EXTRACCIÓN DE FOTOS (Mapeo inteligente)
+                                                    const nombreNormalizado = normalizarNombre(c);
+                                                    const fotoFirebase = fotosConcejales[c] || fotosConcejales[nombreNormalizado];
+                                                    const fotoLocal = FOTOS_LOCALES_CONCEJALES[nombreNormalizado];
                                                     const fotoFinal = fotoFirebase || fotoLocal;
 
                                                     const pctMeta = configApp.meta_concejales > 0 ? Math.min(Math.round((cant/configApp.meta_concejales)*100), 100) : 0;
+                                                    
+                                                    // Texto Limpio para Mostrar (sin "16 - ")
+                                                    const nombreLimpio = c.includes(' - ') ? c.split(' - ')[1].trim() : c.trim();
 
                                                     return (
                                                         <div key={c} onClick={() => {setConcejalEnDetalle(c); setFDetCoord("TODOS"); setFDetVoto("TODOS"); setFDetPC("TODOS"); setLimiteDetalleConcejal(100);}} className="cursor-pointer hover:scale-105 transition-transform duration-300 bg-gradient-to-br from-slate-900 to-black rounded-2xl p-5 text-white shadow-xl relative overflow-hidden group border border-slate-700">
@@ -1756,4 +1855,3 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
         </div>
     );
 }
-
