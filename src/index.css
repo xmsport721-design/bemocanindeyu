@@ -1,3 +1,80 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ──────────────────────────────────────────────────
+   BASE MOBILE — Android & iOS
+   ────────────────────────────────────────────────── */
+@layer base {
+  html {
+    /* Fix 100vh en Safari iOS (barra de URL variable) */
+    height: -webkit-fill-available;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh; /* dynamic viewport — Tailwind v4 / modern browsers */
+    /* Deshabilitar pull-to-refresh y overscroll que arruinan apps */
+    overscroll-behavior-y: none;
+  }
+
+  /* ── Prevenir zoom al hacer focus en inputs en iOS ──
+     Safari hace zoom cuando font-size < 16px.
+     @layer base tiene menor prioridad que @layer utilities,
+     por lo que text-xl / text-sm siguen funcionando. */
+  input, select, textarea {
+    font-size: 16px;
+  }
+
+  /* Quitar tap highlight azul en Android */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Reducir delay táctil de 300ms en botones */
+  button, a, label {
+    touch-action: manipulation;
+  }
+
+  /* iOS: área segura (notch + home bar) en el header sticky */
+  header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Padding inferior para el home bar de iPhone */
+  .pb-20 {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ──────────────────────────────────────────────────
+   UTILIDADES CUSTOM
+   ────────────────────────────────────────────────── */
+@layer utilities {
+  /* Ocultar barra de scroll (usada en nav de tabs) */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Scroll con inercia suave en iOS */
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ──────────────────────────────────────────────────
+   ANIMACIONES
+   ────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s ease-out both;
+}

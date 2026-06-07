@@ -180,6 +180,7 @@ function LoginScreen({ auth, db }) {
         const em = e.target.em.value.trim().toLowerCase();
         const ps = e.target.ps.value;
         if (!em) return alert("Ingresa un correo válido.");
+        if (!em.endsWith('@bemo.com')) return alert("⚠️ Solo se permite acceso con correo @bemo.com\n\nEjemplo: tunombre@bemo.com");
         try {
             if (isRegister) {
                 const res = await createUserWithEmailAndPassword(auth, em, ps);
@@ -205,7 +206,7 @@ function LoginScreen({ auth, db }) {
                 <h1 className="text-3xl font-black text-center mb-2 uppercase">BEMO <span className="text-red-700">2026</span></h1>
                 <p className="text-center text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest">DPTO. DE {NOMBRE_DEPARTAMENTO}</p>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <input name="em" type="email" placeholder="Correo" autoComplete="username" className="w-full p-4 border rounded-xl font-bold outline-none focus:ring-2 ring-red-500" required />
+                    <input name="em" type="email" placeholder="usuario@bemo.com" autoComplete="username" className="w-full p-4 border rounded-xl font-bold outline-none focus:ring-2 ring-red-500" required />
                     <input name="ps" type="password" placeholder="Contraseña" autoComplete="current-password" className="w-full p-4 border rounded-xl font-bold outline-none focus:ring-2 ring-red-500" required />
                     <button type="submit" className="bg-red-700 hover:bg-red-800 text-white w-full py-4 rounded-xl font-black shadow-lg">{isRegister ? "CREAR CUENTA" : "INGRESAR AL SISTEMA"}</button>
                 </form>
@@ -229,7 +230,10 @@ function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental
     const eliminar = (uid, e) => { if(window.confirm(`⚠️ ¿Eliminar a ${e}?`)) remove(ref(db, `usuarios/${uid}`)); };
 
     const crearUsr = async (e) => {
-        e.preventDefault(); if(nClave.length<6) return alert("Mín. 6 letras"); setCreando(true);
+        e.preventDefault();
+        if(nClave.length<6) return alert("Mín. 6 letras");
+        if(!nEmail.trim().toLowerCase().endsWith('@bemo.com')) return alert("⚠️ Solo se pueden crear usuarios con correo @bemo.com\n\nEjemplo: nombre@bemo.com");
+        setCreando(true);
         try {
             const apps = getApps(); let sApp = apps.find(a => a.name === "SecApp"); if (!sApp) sApp = initializeApp(firebaseConfig, "SecApp"); 
             const sAuth = getAuth(sApp); const emailNorm = nEmail.trim().toLowerCase(); const res = await createUserWithEmailAndPassword(sAuth, emailNorm, nClave);
