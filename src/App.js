@@ -176,14 +176,28 @@ export default function BemoSystem() {
 function LoginScreen({ auth, db }) {
     const [isRegister, setIsRegister] = useState(false);
     const handleSubmit = async (e) => {
-        e.preventDefault(); const em = e.target.em.value; const ps = e.target.ps.value;
+        e.preventDefault();
+        const em = e.target.em.value.trim().toLowerCase();
+        const ps = e.target.ps.value;
+        if (!em) return alert("Ingresa un correo válido.");
         try {
             if (isRegister) {
                 const res = await createUserWithEmailAndPassword(auth, em, ps);
                 await set(ref(db, `usuarios/${res.user.uid}`), { email: em, password_plain: ps, rol: 'master_departamental', distrito: DISTRITOS_CANINDEYU[0], nombre_oficial: 'COMANDO' });
                 alert("¡Cuenta creada exitosamente!");
-            } else await signInWithEmailAndPassword(auth, em, ps);
-        } catch (err) { alert("Error: " + err.message); }
+            } else {
+                await signInWithEmailAndPassword(auth, em, ps);
+            }
+        } catch (err) {
+            const codigo = err.code;
+            if (codigo === 'auth/user-not-found' || codigo === 'auth/wrong-password' || codigo === 'auth/invalid-credential') {
+                alert("❌ Correo o contraseña incorrectos. Verifica con tu administrador.");
+            } else if (codigo === 'auth/too-many-requests') {
+                alert("⚠️ Cuenta bloqueada temporalmente por intentos fallidos. Intenta más tarde.");
+            } else {
+                alert("Error: " + err.message);
+            }
+        }
     };
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
@@ -204,7 +218,7 @@ function LoginScreen({ auth, db }) {
     );
 }
 
-function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental, db, distritoFiltro }) {
+function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental, db, distritoFiltro, usuariosOnline }) {
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const [verClaves, setVerClaves] = useState({}); const [mostrarForm, setMostrarForm] = useState(false);
     const [nEmail, setNEmail] = useState(""); const [nClave, setNClave] = useState(""); const [nRol, setNRol] = useState("veedor"); const [nDistrito, setNDistrito] = useState(distritoFiltro === "TODOS" ? DISTRITOS_CANINDEYU[0] : distritoFiltro);
@@ -218,8 +232,8 @@ function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental
         e.preventDefault(); if(nClave.length<6) return alert("Mín. 6 letras"); setCreando(true);
         try {
             const apps = getApps(); let sApp = apps.find(a => a.name === "SecApp"); if (!sApp) sApp = initializeApp(firebaseConfig, "SecApp"); 
-            const sAuth = getAuth(sApp); const res = await createUserWithEmailAndPassword(sAuth, nEmail, nClave);
-            await set(ref(db, `usuarios/${res.user.uid}`), { email: nEmail, password_plain: nClave, rol: nRol, distrito: esMaster ? nDistrito : perfil.distrito, nombre_oficial: "" });
+            const sAuth = getAuth(sApp); const emailNorm = nEmail.trim().toLowerCase(); const res = await createUserWithEmailAndPassword(sAuth, emailNorm, nClave);
+            await set(ref(db, `usuarios/${res.user.uid}`), { email: emailNorm, password_plain: nClave, rol: nRol, distrito: esMaster ? nDistrito : perfil.distrito, nombre_oficial: "" });
             await signOut(sAuth); alert("✅ Creado"); setMostrarForm(false); setNEmail(""); setNClave("");
         } catch(err) { alert(err.message); } setCreando(false);
     };
@@ -233,10 +247,24 @@ function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental
                     <button type="submit" disabled={creando} className="w-full py-3 bg-blue-600 text-white rounded-xl font-black">{creando ? "CREANDO..." : "GUARDAR"}</button>
                 </form>
             )}
-            <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-100 uppercase text-[10px]"><tr><th className="p-3">Email</th><th className="p-3">Clave</th><th className="p-3">Distrito</th><th className="p-3">Rol</th><th className="p-3">Nombre</th><th className="p-3 text-center">X</th></tr></thead><tbody className="divide-y">
-                {usuarios.map(([id, d]) => (
-                    <tr key={id} className="hover:bg-slate-50"><td className="p-3 font-bold">{d.email}</td><td className="p-3 font-mono text-xs flex items-center gap-2"><span>{verClaves[id]?d.password_plain:'••••'}</span><button onClick={()=>setVerClaves(p=>({...p, [id]:!p[id]}))}><Eye size={14}/></button></td><td className="p-3 font-bold text-[10px]">{d.distrito}</td><td className="p-3 text-[10px] uppercase">{d.rol}</td><td className="p-3 text-[10px]">{d.rol==='concejal' ? <select className="p-2 border rounded" value={d.nombre_oficial||""} onChange={e=>actualizar(id,'nombre_oficial',e.target.value)}><option value="">Asignar...</option>{(configuracionDepartamental[d.distrito]?.concejales||[]).map(c=><option key={c}>{c}</option>)}</select> : '-'}</td><td className="p-3 text-center"><button onClick={()=>eliminar(id,d.email)} className="text-red-500"><Trash2 size={16}/></button></td></tr>
-                ))}
+            <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-100 uppercase text-[10px]"><tr><th className="p-3">Estado</th><th className="p-3">Email</th><th className="p-3">Clave</th><th className="p-3">Distrito</th><th className="p-3">Rol</th><th className="p-3">Nombre</th><th className="p-3 text-center">X</th></tr></thead><tbody className="divide-y">
+                {usuarios.map(([id, d]) => {
+                    const isOnline = !!(usuariosOnline||{})[id];
+                    return (
+                    <tr key={id} className={`hover:bg-slate-50 ${isOnline ? 'bg-green-50/40' : ''}`}>
+                        <td className="p-3 text-center">
+                            <span title={isOnline ? "CONECTADO AHORA" : "DESCONECTADO"} className={`inline-block w-3 h-3 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                            {isOnline && <div className="text-[8px] font-black text-green-600 mt-0.5">ONLINE</div>}
+                        </td>
+                        <td className="p-3 font-bold">{d.email}</td>
+                        <td className="p-3 font-mono text-xs flex items-center gap-2"><span>{verClaves[id]?d.password_plain:'••••'}</span><button onClick={()=>setVerClaves(p=>({...p, [id]:!p[id]}))}><Eye size={14}/></button></td>
+                        <td className="p-3 font-bold text-[10px]">{d.distrito}</td>
+                        <td className="p-3 text-[10px] uppercase">{d.rol}</td>
+                        <td className="p-3 text-[10px]">{d.rol==='concejal' ? <select className="p-2 border rounded" value={d.nombre_oficial||""} onChange={e=>actualizar(id,'nombre_oficial',e.target.value)}><option value="">Asignar...</option>{(configuracionDepartamental[d.distrito]?.concejales||[]).map(c=><option key={c}>{c}</option>)}</select> : '-'}</td>
+                        <td className="p-3 text-center"><button onClick={()=>eliminar(id,d.email)} className="text-red-500"><Trash2 size={16}/></button></td>
+                    </tr>
+                    );
+                })}
             </tbody></table></div>
         </div>
     );
@@ -658,6 +686,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     // NUEVO: Estado para el Lápiz de Edición de Voto
     const [editandoVotoId, setEditandoVotoId] = useState(null);
     const [formEdicion, setFormEdicion] = useState({ concejal: "", coordinador: "", semaforo: "" });
+    const [soloDuplicados, setSoloDuplicados] = useState(false);
 
     const dataConfigBruta = distritoFiltroMaster === "TODOS" ? {} : (configuracionDepartamental[distritoFiltroMaster] || {});
     const configApp = { 
@@ -1099,6 +1128,12 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                     <Settings size={16} className="text-slate-400"/> AJUSTES
                                 </button>
 
+                                {esMaster && (
+                                <button onClick={() => {setActiveTab("limpiar"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${activeTab === 'limpiar' ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-orange-50 hover:text-orange-700'}`}>
+                                    <Trash2 size={16} className={activeTab === 'limpiar' ? "text-orange-500" : "text-red-400"}/> LIMPIAR DÍA D
+                                </button>
+                                )}
+
                             </div>
                         )}
                     </div>
@@ -1112,7 +1147,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     distritoFiltroMaster === "TODOS" ? (
                         <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Para administrar usuarios, selecciona un distrito específico en el menú superior.</p></div>
                     ) : (
-                        <PanelUsuarios perfil={perfil} usuariosRegistrados={usuariosRegistrados} configuracionDepartamental={configuracionDepartamental} db={db} distritoFiltro={distritoFiltroMaster} />
+                        <PanelUsuarios perfil={perfil} usuariosRegistrados={usuariosRegistrados} configuracionDepartamental={configuracionDepartamental} db={db} distritoFiltro={distritoFiltroMaster} usuariosOnline={usuariosOnline} />
                     )
                 )}
 
@@ -1167,16 +1202,17 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                 {activeTab === "lista" && (() => {
                     const listaMostrar = votosFiltrados.filter(v => {
                         const texto = filtroTexto ? String(filtroTexto).toLowerCase() : "";
-                        const cumpleTexto = texto === "" || 
-                            String(v.cedula || "").toLowerCase().includes(texto) || 
-                            String(v.nombre || "").toLowerCase().includes(texto) || 
+                        const cumpleTexto = texto === "" ||
+                            String(v.cedula || "").toLowerCase().includes(texto) ||
+                            String(v.nombre || "").toLowerCase().includes(texto) ||
                             String(v.apellido || "").toLowerCase().includes(texto);
-                        
+
                         const cumpleConcejal = filtroConcejal === "TODOS" || concejalCoincide(v.concejal, filtroConcejal);
                         const cumpleCoord = filtroCoordinadorAdmin === "TODOS" || v.coordinador === filtroCoordinadorAdmin;
                         const cumpleColor = filtroSemaforoAdmin === "TODOS" || v.semaforo === filtroSemaforoAdmin;
+                        const cumpleDuplicado = !soloDuplicados || cedulasDuplicadas.has(v.cedula);
 
-                        return cumpleTexto && cumpleConcejal && cumpleCoord && cumpleColor;
+                        return cumpleTexto && cumpleConcejal && cumpleCoord && cumpleColor && cumpleDuplicado;
                     });
 
                     return (
@@ -1196,11 +1232,11 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                             
                             {esMaster && <button onClick={exportarExcel} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-black flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md"><Download size={18}/> EXPORTAR EXCEL</button>}
                             
-                            {/* INDICADOR DE DUPLICADOS */}
+                            {/* FILTRO DE DUPLICADOS - TOGGLE */}
                             {cedulasDuplicadas.size > 0 && (
-                                <span className="bg-red-100 border border-red-300 text-red-700 px-4 py-2 rounded-xl font-black flex items-center justify-center gap-2 shrink-0 animate-pulse shadow-sm">
-                                    <AlertTriangle size={18}/> {cedulasDuplicadas.size} DUPLICADOS
-                                </span>
+                                <button onClick={() => { setSoloDuplicados(p => !p); setLimiteListaAdmin(100); }} className={`px-4 py-2 rounded-xl font-black flex items-center justify-center gap-2 shrink-0 shadow-sm border-2 transition-all ${soloDuplicados ? 'bg-red-600 text-white border-red-700 scale-105' : 'bg-red-100 border-red-400 text-red-700 animate-pulse'}`}>
+                                    <AlertTriangle size={18}/> {cedulasDuplicadas.size} DUPLICADOS {soloDuplicados ? '← VER TODOS' : '← VER SOLO ESTOS'}
+                                </button>
                             )}
                         </div>
                         <table className="w-full text-left min-w-[1000px]"><thead className="bg-slate-800 text-white text-xs uppercase"><tr><th className="p-3">Votante</th><th className="p-3">Mesa/Ord</th><th className="p-3">Cargado Por</th><th className="p-3">Día D</th><th className="p-3 text-center">Acciones</th></tr></thead>
@@ -1424,15 +1460,47 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
 
                                 {verListaPC && (
                                     <div className="bg-white rounded-xl shadow overflow-hidden max-h-96 overflow-y-auto">
-                                        <table className="w-full text-left"><thead className="bg-slate-100 text-slate-700 text-[10px] uppercase"><tr><th className="p-3 sticky top-0 bg-slate-100">PC Registró</th><th className="p-3 sticky top-0 bg-slate-100">Votante (Llave)</th><th className="p-3 sticky top-0 bg-slate-100">Hora PC</th></tr></thead>
+                                        <div className="flex justify-between items-center px-4 py-2 bg-slate-50 border-b text-[10px] font-black text-slate-500 uppercase">
+                                            <span>Total: {Object.keys(pasoPCFiltrados).length} registros</span>
+                                            <span className="text-green-600">✅ Votaron: {Object.entries(pasoPCFiltrados).filter(([k]) => yaVotaronFiltrados[k]).length}</span>
+                                            <span className="text-orange-500">⏳ Pendientes: {Object.entries(pasoPCFiltrados).filter(([k]) => !yaVotaronFiltrados[k]).length}</span>
+                                        </div>
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-100 text-slate-700 text-[10px] uppercase">
+                                                <tr>
+                                                    <th className="p-3 sticky top-0 bg-slate-100">Nombre Completo</th>
+                                                    <th className="p-3 sticky top-0 bg-slate-100 text-center">Mesa</th>
+                                                    <th className="p-3 sticky top-0 bg-slate-100">Registró PC</th>
+                                                    <th className="p-3 sticky top-0 bg-slate-100">Hora PC</th>
+                                                    <th className="p-3 sticky top-0 bg-slate-100 text-center">¿Votó?</th>
+                                                </tr>
+                                            </thead>
                                             <tbody className="divide-y text-sm">
                                                 {Object.entries(pasoPCFiltrados).map(([llave, pcData]) => {
+                                                    const elector = padronLlaves[llave];
+                                                    const votoData = yaVotaronFiltrados[llave];
                                                     const parts = llave.split('_');
+                                                    const mesa = parts.length > 1 ? parts[parts.length - 2] : '-';
                                                     return (
-                                                        <tr key={llave} className="hover:bg-slate-50">
-                                                            <td className="p-3 font-bold text-blue-800">{pcData.registradoPorNombre}</td>
-                                                            <td className="p-3 text-xs font-bold text-slate-600">D:{parts[0]} | M:{parts[1]} | Ord:{parts[2]}</td>
+                                                        <tr key={llave} className={`hover:bg-slate-50 ${votoData ? 'bg-green-50/40' : ''}`}>
+                                                            <td className="p-3">
+                                                                {elector ? (
+                                                                    <>
+                                                                        <div className="font-black text-sm text-slate-800">{elector.nombre} {elector.apellido}</div>
+                                                                        <div className="text-[9px] text-gray-400 font-bold">C.I: {elector.ci}</div>
+                                                                    </>
+                                                                ) : (
+                                                                    <span className="text-gray-400 text-xs font-mono">{llave}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-3 font-black text-center text-blue-700 text-lg">{mesa}</td>
+                                                            <td className="p-3 font-bold text-blue-800 text-xs">{pcData.registradoPorNombre}</td>
                                                             <td className="p-3 text-xs text-gray-500">{pcData.hora}</td>
+                                                            <td className="p-3 text-center">
+                                                                {votoData
+                                                                    ? <span className="bg-green-100 text-green-700 font-black text-[9px] px-2 py-1 rounded-full">✅ {votoData.hora}</span>
+                                                                    : <span className="bg-orange-100 text-orange-600 font-black text-[9px] px-2 py-1 rounded-full">⏳ PENDIENTE</span>}
+                                                            </td>
                                                         </tr>
                                                     )
                                                 })}
@@ -1850,6 +1918,56 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                 {activeTab === "config" && (
                     distritoFiltroMaster === "TODOS" ? <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Para configurar los datos de los intendentes o metas, selecciona el distrito que deseas ajustar en el menú.</p></div>
                     : <PanelConfiguracionDepartamental perfil={perfil} configuracionDepartamental={configuracionDepartamental} db={db} distritoGlobal={distritoFiltroMaster} setDistritoGlobal={setDistritoFiltroMaster} />
+                )}
+
+                {activeTab === "limpiar" && esMaster && (
+                    <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-orange-500 max-w-2xl mx-auto space-y-4 animate-fade-in">
+                        <h2 className="text-2xl font-black text-orange-700 flex items-center gap-2"><Trash2 size={28}/> PREPARAR SISTEMA PARA DÍA D</h2>
+                        <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl text-sm font-bold text-orange-800">
+                            ⚠️ Esta sección borra los datos de prueba antes de las elecciones. Los registros de <span className="underline">votos seguros (concejales) NO se borran</span>.
+                        </div>
+
+                        <div className="space-y-3 mt-2">
+                            {[
+                                { label: "PASO POR PC (Check-ins)", path: "dia_d/paso_pc_checkins" },
+                                { label: "REGISTRO DE QUIÉN YA VOTÓ", path: "dia_d/votos_efectuados" },
+                                { label: "MESAS CERRADAS", path: "dia_d/mesas_cerradas" },
+                                { label: "ESCRUTINIO FINAL", path: "dia_d/escrutinio" },
+                                { label: "ASIGNACIONES DE VEEDORES", path: "dia_d/asignaciones_veedores" },
+                                { label: "ESTADO ONLINE DE VEEDORES", path: "dia_d/veedores_online" },
+                            ].map(item => (
+                                <div key={item.path} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div>
+                                        <div className="font-black text-sm text-slate-800">{item.label}</div>
+                                        <div className="text-[10px] text-gray-400 font-bold font-mono">{item.path}</div>
+                                    </div>
+                                    <button onClick={() => {
+                                        if(window.confirm(`¿Limpiar "${item.label}"?\n\nEsta acción no se puede deshacer.`))
+                                            remove(ref(db, item.path))
+                                                .then(() => alert(`✅ "${item.label}" limpiado correctamente.`))
+                                                .catch(e => alert("Error: " + e.message));
+                                    }} className="bg-red-100 text-red-700 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg font-black text-xs transition-colors shrink-0 ml-4">BORRAR</button>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-6 border-t-2 border-orange-200 pt-6">
+                            <p className="text-center text-xs font-bold text-gray-500 mb-4">⬇️ O borra TODO de una vez con el botón de abajo</p>
+                            <button onClick={() => {
+                                if(!window.confirm("⚠️ ¿LIMPIAR TODOS LOS DATOS DEL DÍA D?\n\nSe borrarán:\n• Paso PC\n• Registros de quién ya votó\n• Mesas cerradas\n• Escrutinio\n• Asignaciones de veedores\n• Estado online\n\n✅ Los registros de concejales (votos seguros) NO se borran.\n\nEsta acción no se puede deshacer.")) return;
+                                Promise.all([
+                                    remove(ref(db, "dia_d/paso_pc_checkins")),
+                                    remove(ref(db, "dia_d/votos_efectuados")),
+                                    remove(ref(db, "dia_d/mesas_cerradas")),
+                                    remove(ref(db, "dia_d/escrutinio")),
+                                    remove(ref(db, "dia_d/asignaciones_veedores")),
+                                    remove(ref(db, "dia_d/veedores_online")),
+                                ]).then(() => alert("✅ Sistema preparado y limpio para el Día D.")).catch(e => alert("Error: " + e.message));
+                            }} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-5 rounded-2xl font-black text-lg shadow-2xl flex justify-center items-center gap-3 transition-colors">
+                                <Trash2 size={24}/> LIMPIAR TODO Y PREPARAR PARA DÍA D
+                            </button>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>
