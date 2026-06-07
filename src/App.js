@@ -1925,40 +1925,66 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                 )}
 
                 {activeTab === "limpiar" && esMaster && (
-                    <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-orange-500 max-w-2xl mx-auto space-y-4 animate-fade-in">
-                        <h2 className="text-2xl font-black text-orange-700 flex items-center gap-2"><Trash2 size={28}/> PREPARAR SISTEMA PARA DÍA D</h2>
-                        <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl text-sm font-bold text-orange-800">
-                            ⚠️ Esta sección borra los datos de prueba antes de las elecciones. Los registros de <span className="underline">votos seguros (concejales) NO se borran</span>.
-                        </div>
+                    <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-orange-500 max-w-2xl mx-auto space-y-6 animate-fade-in">
+                        <h2 className="text-2xl font-black text-orange-700 flex items-center gap-2"><Trash2 size={28}/> RESET COMPLETO DEL SISTEMA</h2>
 
-                        <div className="space-y-3 mt-2">
-                            {[
-                                { label: "PASO POR PC (Check-ins)", path: "dia_d/paso_pc_checkins" },
-                                { label: "REGISTRO DE QUIÉN YA VOTÓ", path: "dia_d/votos_efectuados" },
-                                { label: "MESAS CERRADAS", path: "dia_d/mesas_cerradas" },
-                                { label: "ESCRUTINIO FINAL", path: "dia_d/escrutinio" },
-                                { label: "ASIGNACIONES DE VEEDORES", path: "dia_d/asignaciones_veedores" },
-                                { label: "ESTADO ONLINE DE VEEDORES", path: "dia_d/veedores_online" },
-                            ].map(item => (
-                                <div key={item.path} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                    <div>
-                                        <div className="font-black text-sm text-slate-800">{item.label}</div>
-                                        <div className="text-[10px] text-gray-400 font-bold font-mono">{item.path}</div>
+                        {/* ── BLOQUE 1: DÍA D ── */}
+                        <div>
+                            <h3 className="font-black text-sm text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <span className="inline-block w-2 h-2 rounded-full bg-orange-400"></span> DATOS DEL DÍA D
+                            </h3>
+                            <div className="space-y-2">
+                                {[
+                                    { label: "PASO POR PC (Check-ins)",         path: "dia_d/paso_pc_checkins" },
+                                    { label: "REGISTRO DE QUIÉN YA VOTÓ",        path: "dia_d/votos_efectuados" },
+                                    { label: "MESAS CERRADAS",                   path: "dia_d/mesas_cerradas" },
+                                    { label: "ESCRUTINIO FINAL",                 path: "dia_d/escrutinio" },
+                                    { label: "ASIGNACIONES DE VEEDORES",         path: "dia_d/asignaciones_veedores" },
+                                    { label: "ESTADO ONLINE VEEDORES",           path: "dia_d/veedores_online" },
+                                    { label: "ESTADO ONLINE TODOS LOS USUARIOS", path: "estado_online" },
+                                ].map(item => (
+                                    <div key={item.path} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                        <div>
+                                            <div className="font-black text-xs text-slate-800">{item.label}</div>
+                                            <div className="text-[9px] text-gray-400 font-bold font-mono">{item.path}</div>
+                                        </div>
+                                        <button onClick={() => {
+                                            if(window.confirm(`¿Limpiar "${item.label}"?`))
+                                                remove(ref(db, item.path))
+                                                    .then(() => alert(`✅ "${item.label}" limpiado.`))
+                                                    .catch(e => alert("Error: " + e.message));
+                                        }} className="bg-red-100 text-red-700 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg font-black text-xs transition-colors shrink-0 ml-3">BORRAR</button>
                                     </div>
-                                    <button onClick={() => {
-                                        if(window.confirm(`¿Limpiar "${item.label}"?\n\nEsta acción no se puede deshacer.`))
-                                            remove(ref(db, item.path))
-                                                .then(() => alert(`✅ "${item.label}" limpiado correctamente.`))
-                                                .catch(e => alert("Error: " + e.message));
-                                    }} className="bg-red-100 text-red-700 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg font-black text-xs transition-colors shrink-0 ml-4">BORRAR</button>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
 
-                        <div className="mt-6 border-t-2 border-orange-200 pt-6">
-                            <p className="text-center text-xs font-bold text-gray-500 mb-4">⬇️ O borra TODO de una vez con el botón de abajo</p>
+                        {/* ── BLOQUE 2: VOTOS REGISTRADOS (peligro) ── */}
+                        <div className="border-2 border-red-300 rounded-2xl p-4 bg-red-50/50">
+                            <h3 className="font-black text-sm text-red-700 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse"></span> VOTOS REGISTRADOS POR CONCEJALES
+                            </h3>
+                            <p className="text-[10px] font-bold text-red-500 mb-3">⚠️ Esto borra TODOS los padrones cargados por los concejales (votos_seguros). Úsalo solo para limpiar pruebas.</p>
+                            <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-red-200">
+                                <div>
+                                    <div className="font-black text-xs text-red-800">TODOS LOS VOTOS REGISTRADOS</div>
+                                    <div className="text-[9px] text-red-400 font-bold font-mono">votos_seguros</div>
+                                </div>
+                                <button onClick={() => {
+                                    if(!window.confirm("🚨 ¿BORRAR TODOS LOS VOTOS REGISTRADOS?\n\nEsto eliminará TODA la lista de votantes cargada por los concejales.\n\nEscribe 'CONFIRMAR' en el siguiente paso.")) return;
+                                    const conf = window.prompt("Escribe CONFIRMAR para proceder:");
+                                    if(conf !== "CONFIRMAR") return alert("Operación cancelada.");
+                                    remove(ref(db, "votos_seguros"))
+                                        .then(() => alert("✅ votos_seguros eliminado completamente."))
+                                        .catch(e => alert("Error: " + e.message));
+                                }} className="bg-red-600 hover:bg-red-800 text-white px-3 py-1.5 rounded-lg font-black text-xs transition-colors shrink-0 ml-3">BORRAR TODO</button>
+                            </div>
+                        </div>
+
+                        {/* ── BOTÓN LIMPIAR TODO DÍA D ── */}
+                        <div className="border-t-2 border-orange-200 pt-4 space-y-3">
                             <button onClick={() => {
-                                if(!window.confirm("⚠️ ¿LIMPIAR TODOS LOS DATOS DEL DÍA D?\n\nSe borrarán:\n• Paso PC\n• Registros de quién ya votó\n• Mesas cerradas\n• Escrutinio\n• Asignaciones de veedores\n• Estado online\n\n✅ Los registros de concejales (votos seguros) NO se borran.\n\nEsta acción no se puede deshacer.")) return;
+                                if(!window.confirm("⚠️ ¿LIMPIAR TODOS LOS DATOS DEL DÍA D?\n\nSe borrarán:\n• Paso PC\n• Quién ya votó\n• Mesas cerradas\n• Escrutinio\n• Asignaciones veedores\n• Estado online\n\n(Los votos registrados NO se borran con este botón)")) return;
                                 Promise.all([
                                     remove(ref(db, "dia_d/paso_pc_checkins")),
                                     remove(ref(db, "dia_d/votos_efectuados")),
@@ -1966,9 +1992,24 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                     remove(ref(db, "dia_d/escrutinio")),
                                     remove(ref(db, "dia_d/asignaciones_veedores")),
                                     remove(ref(db, "dia_d/veedores_online")),
-                                ]).then(() => alert("✅ Sistema preparado y limpio para el Día D.")).catch(e => alert("Error: " + e.message));
-                            }} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-5 rounded-2xl font-black text-lg shadow-2xl flex justify-center items-center gap-3 transition-colors">
-                                <Trash2 size={24}/> LIMPIAR TODO Y PREPARAR PARA DÍA D
+                                    remove(ref(db, "estado_online")),
+                                ]).then(() => alert("✅ Día D limpio. Sistema listo para las elecciones.")).catch(e => alert("Error: " + e.message));
+                            }} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-black shadow-xl flex justify-center items-center gap-2 transition-colors">
+                                <Trash2 size={20}/> LIMPIAR TODO EL DÍA D
+                            </button>
+
+                            {/* ── RESET TOTAL INCLUYENDO VOTOS ── */}
+                            <button onClick={() => {
+                                if(!window.confirm("🚨 RESET TOTAL\n\nSe borrarán ABSOLUTAMENTE TODOS los datos:\n• Paso PC\n• Quién ya votó\n• Mesas cerradas\n• Escrutinio\n• Asignaciones veedores\n• Estado online\n• ⚠️ TODOS LOS VOTOS REGISTRADOS\n\n¿Estás seguro?")) return;
+                                const conf = window.prompt("Escribe RESET para confirmar el borrado total:");
+                                if(conf !== "RESET") return alert("Cancelado.");
+                                Promise.all([
+                                    remove(ref(db, "dia_d")),
+                                    remove(ref(db, "votos_seguros")),
+                                    remove(ref(db, "estado_online")),
+                                ]).then(() => alert("✅ RESET TOTAL completado. Base de datos limpia.")).catch(e => alert("Error: " + e.message));
+                            }} className="w-full bg-slate-800 hover:bg-red-900 text-white py-4 rounded-2xl font-black shadow-xl flex justify-center items-center gap-2 transition-colors border-2 border-red-700">
+                                <Trash2 size={20}/> RESET TOTAL (INCLUYE VOTOS REGISTRADOS)
                             </button>
                         </div>
                     </div>
