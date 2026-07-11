@@ -146,7 +146,7 @@ async function subir(padron) {
   }
   admin.initializeApp({
     credential: admin.credential.cert(require(keyPath)),
-    databaseURL: "https://canindeyu-bd-default-rtdb.firebaseio.com",
+    databaseURL: "https://concepcion-7e55e-default-rtdb.firebaseio.com",
   });
   const db = admin.database();
 

@@ -24,6 +24,8 @@ yarn-error.log*
 
 # credenciales / datos pesados (NO subir)
 serviceAccountKey.json
+*firebase-adminsdk*.json
+*-firebase-adminsdk-*
 padron_import.json
 *.CSV
 *.csv

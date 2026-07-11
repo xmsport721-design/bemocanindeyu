@@ -10,13 +10,13 @@ import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare
 // CONFIGURACIÓN DE FIREBASE (CANINDEYÚ)
 // ============================================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyBAVDbctl18PoPggpL8Zd0SA-pbYQyr7aE",
-  authDomain: "canindeyu-bd.firebaseapp.com",
-  databaseURL: "https://canindeyu-bd-default-rtdb.firebaseio.com",
-  projectId: "canindeyu-bd",
-  storageBucket: "canindeyu-bd.firebasestorage.app",
-  messagingSenderId: "662885054967",
-  appId: "1:662885054967:web:abd19f28ae503e55fa96f2"
+  apiKey: "AIzaSyC03JZte5apho_4LEk2-pp1HJ7avuyJ5bM",
+  authDomain: "concepcion-7e55e.firebaseapp.com",
+  databaseURL: "https://concepcion-7e55e-default-rtdb.firebaseio.com",
+  projectId: "concepcion-7e55e",
+  storageBucket: "concepcion-7e55e.firebasestorage.app",
+  messagingSenderId: "42796887287",
+  appId: "1:42796887287:web:0883cd3613ab6260dab7f2"
 };
 
 const app = initializeApp(firebaseConfig);
