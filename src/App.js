@@ -1,53 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
 import './index.css';
 import { initializeApp, getApps } from "firebase/app";
-import { getDatabase, ref, push, onValue, get, set, remove, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
+import { ref, push, onValue, get, set, remove, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Eye, Camera, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, X, Calculator, TrendingUp, TrendingDown, ClipboardList, Globe, Edit2, UserPlus, ShieldAlert, Unlock, ChevronDown } from "lucide-react";
+import { db, auth, storage, firebaseConfig } from "./firebase";
+import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "./constants";
+import { generarLlave, generarLlaveMesa } from "./lib/llaves";
 
-// ============================================================================
-// CONFIGURACIÓN DE FIREBASE (CANINDEYÚ)
-// ============================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyC03JZte5apho_4LEk2-pp1HJ7avuyJ5bM",
-  authDomain: "concepcion-7e55e.firebaseapp.com",
-  databaseURL: "https://concepcion-7e55e-default-rtdb.firebaseio.com",
-  projectId: "concepcion-7e55e",
-  storageBucket: "concepcion-7e55e.firebasestorage.app",
-  messagingSenderId: "42796887287",
-  appId: "1:42796887287:web:0883cd3613ab6260dab7f2"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
-
-const DISTRITOS_CONCEPCION = [
-    "CONCEPCION", "BELEN", "HORQUETA", "LORETO", "SAN LAZARO",
-    "YBY YA'U", "AZOTEY", "SGTO.JOSE FELIX LOPEZ", "SAN CARLOS DEL APA",
-    "SAN ALFREDO", "PASO BARRETO", "ARROYITO", "PASO HORQUETA", "ITACUA"
-];
-const NOMBRE_DEPARTAMENTO = "CONCEPCIÓN";
-
-// --- DICCIONARIO DE FOTOS LOCALES (Claves Normalizadas) ---
-const FOTOS_LOCALES_CONCEJALES = {
-  "FABIOPORTILLO": "/fotos/1-fabio_portillo.jpg",
-  "JULIOCABRERA": "/fotos/2- julio_cabrera.jpg",
-  "JOELVILLASANTI": "/fotos/3-joel_villasanti.jpg",
-  "ELENOVERON": "/fotos/4-eleno_verón.jpg",
-  "GLADYSSANTANDER": "/fotos/5-gladys_santander.jpg",
-  "EDGARMONZON": "/fotos/6-edgar_verón.jpg",
-  "MARCELINOGONZALEZ": "/fotos/7-marcelino_gonzález.jpg",
-  "ISMAELFERNANDEZ": "/fotos/8-ismael_fernández.jpg",
-  "LUZMABELR": "/fotos/9-luz_mabel_r.jpg" 
-};
-
-// --- HERRAMIENTAS GLOBALES ---
-const generarLlave = (distrito, mesa, orden) => `${distrito}_${mesa}_${orden}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
-const generarLlaveMesa = (distrito, mesa) => `${distrito}_${mesa}`.toUpperCase().replace(/[.$#[\]/]/g, '').trim();
-
+// --- HERRAMIENTAS GLOBALES (helpers puros) ---
 const normalizarNombre = (str) => {
     if (!str) return "";
     return String(str).toUpperCase()
@@ -107,7 +69,7 @@ export default function BemoSystem() {
             const distritoDelUsuario = pData.distrito;
             setPerfil({ ...pData, rol: rolUsuario });
 
-            if (rolUsuario === "master_departamental" || rolUsuario === "master_global") {
+            if (rolUsuario === "master_departamental" || rolUsuario === "master_global" || rolUsuario === "super_admin") {
                 get(ref(db, 'padron')).then(s => s.exists() && setPadronGlobal(s.val() || {}));
             } else if (distritoDelUsuario) {
                 const padronQuery = query(ref(db, 'padron'), orderByChild('distrito'), equalTo(distritoDelUsuario));
@@ -695,10 +657,11 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     };
 
     const votosFiltrados = useMemo(() => {
-        return distritoFiltroMaster === "TODOS" 
-            ? (votosSeguros || []) 
+        // super_admin (búsqueda global) ve todos sus registros de cualquier distrito
+        return (distritoFiltroMaster === "TODOS" || perfil.rol === 'super_admin')
+            ? (votosSeguros || [])
             : (votosSeguros || []).filter(v => v.distrito === distritoFiltroMaster);
-    }, [votosSeguros, distritoFiltroMaster]);
+    }, [votosSeguros, distritoFiltroMaster, perfil.rol]);
 
     // MAPA DE DUPLICADOS PARA EL PANEL ADMIN (Pasa a Rojo Automático)
     const cedulasDuplicadas = useMemo(() => {
@@ -756,7 +719,11 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
 
     const [form, setForm] = useState({ cedula: "", nombre: "", apellido: "", telefono: "", distrito: distritoFiltroMaster, local: "", mesa: "", orden: "", concejal: "SIN ASIGNAR", coordinador: "", semaforo: "VERDE" });
     const [modoNuevoCoord, setModoNuevoCoord] = useState(false);
-    
+    const [coordFijado, setCoordFijado] = useState(false);
+    const [coordinadores, setCoordinadores] = useState({});
+    const [nuevoCoord, setNuevoCoord] = useState({ nombre: "", localidad: "", telefono: "", tipo: "URBANA" });
+    useEffect(() => { const un = onValue(ref(db, 'coordinadores'), s => setCoordinadores(s.val() || {})); return () => un(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const [limiteListaAdmin, setLimiteListaAdmin] = useState(100);
     const [limiteDetalleConcejal, setLimiteDetalleConcejal] = useState(100);
 
@@ -769,6 +736,8 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
     const [verListaPC, setVerListaPC] = useState(false);
     
     const coordinadoresUnicos = [...new Set(votosFiltrados.map(v => v.coordinador).filter(c => c && c.trim() !== ""))];
+    // Para el selector de registro: coordinadores creados (con localidad/tel/tipo) + los que ya tienen votos
+    const listaCoordinadores = [...new Set([...Object.values(coordinadores).map(c => c.nombre).filter(Boolean), ...coordinadoresUnicos])].sort();
     
     const choquesDetectados = useMemo(() => { 
         if (distritoFiltroMaster === "TODOS") return [];
@@ -802,10 +771,10 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
 
     useEffect(() => {
         setConcejalEnDetalle(null);
-        setForm(f => ({...f, distrito: distritoFiltroMaster === "TODOS" ? "" : distritoFiltroMaster, concejal: "SIN ASIGNAR", coordinador: ""}));
+        setForm(f => ({...f, distrito: distritoFiltroMaster === "TODOS" ? "" : distritoFiltroMaster, concejal: "SIN ASIGNAR", coordinador: coordFijado ? f.coordinador : ""}));
         setResultadosNombre([]);
         setBusquedaNombre("");
-    }, [distritoFiltroMaster]);
+    }, [distritoFiltroMaster]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // FUNCIONES DEL LÁPIZ DE EDICIÓN
     const guardarEdicionVoto = () => {
@@ -857,8 +826,8 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
         if(busquedaNombre.trim().length < 3) return alert("Escribe al menos 3 letras.");
         const res = Object.entries(padronGlobal || {}).map(([ci, d]) => ({ci, ...d}))
             .filter(p => 
-                (p.nombre + " " + p.apellido).toLowerCase().includes(busquedaNombre.toLowerCase()) && 
-                (distritoFiltroMaster === "TODOS" || p.distrito === distritoFiltroMaster)
+                (p.nombre + " " + p.apellido).toLowerCase().includes(busquedaNombre.toLowerCase()) &&
+                (distritoFiltroMaster === "TODOS" || perfil.rol === 'super_admin' || p.distrito === distritoFiltroMaster)
             ).slice(0, 20);
         
         if (res.length === 0) alert("No se encontraron coincidencias.");
@@ -875,7 +844,19 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
         if (!form.cedula || !form.nombre || !form.distrito) return alert("Faltan datos o distrito.");
         if (votosFiltrados.find(v => String(v.cedula) === String(form.cedula) && v.concejal === form.concejal)) return alert(`⚠️ ALERTA: Ya está en la lista de ${form.concejal}.`);
         push(ref(db, 'votos_seguros'), { ...form, registradoPor: usuarioActivo.email, fecha_registro: new Date().toLocaleString() });
-        setForm({...form, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador:""}); setModoNuevoCoord(false); alert("✅ Voto Registrado.");
+        setForm({...form, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijado ? form.coordinador : ""});
+        if (!coordFijado) setModoNuevoCoord(false);
+        alert("✅ Voto Registrado.");
+    };
+
+    const crearCoordinador = () => {
+        const nombre = nuevoCoord.nombre.trim().toUpperCase();
+        if (!nombre) return alert("Falta el nombre del coordinador.");
+        push(ref(db, 'coordinadores'), { nombre, localidad: nuevoCoord.localidad.trim().toUpperCase(), telefono: nuevoCoord.telefono.trim(), tipo: nuevoCoord.tipo, distrito: form.distrito || perfil.distrito, creadoPor: usuarioActivo.email, fecha: new Date().toLocaleString() });
+        setForm(f => ({...f, coordinador: nombre}));
+        setModoNuevoCoord(false);
+        setNuevoCoord({ nombre: "", localidad: "", telefono: "", tipo: "URBANA" });
+        alert("✅ Coordinador creado: " + nombre);
     };
     
     const eliminarVoto = (id) => { if(window.confirm("⚠️ ¿Eliminar registro?")) remove(ref(db, `votos_seguros/${id}`)); };
@@ -1174,23 +1155,41 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     </div>
 
                     <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">2. CARGA CON CÉDULA DE IDENTIDAD</label>
-                    <div className="flex gap-2 mb-6"><input type="number" placeholder="N° DE CÉDULA" className="flex-1 p-4 border-2 rounded-xl text-xl font-bold outline-none focus:border-red-500" value={form.cedula} onChange={e => setForm({...form, cedula: e.target.value})} /><button onClick={buscarCedulaAdmin} className="bg-slate-800 text-white px-6 rounded-xl font-bold"><Search /></button></div>
+                    <div className="flex gap-2 mb-6"><input type="number" placeholder="N° DE CÉDULA" className="flex-1 p-4 border-2 rounded-xl text-xl font-bold outline-none focus:border-red-500" value={form.cedula} onChange={e => setForm({...form, cedula: e.target.value})} onKeyDown={e => e.key === 'Enter' && buscarCedulaAdmin()} /><button onClick={buscarCedulaAdmin} className="bg-slate-800 text-white px-6 rounded-xl font-bold"><Search /></button></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" readOnly placeholder="NOMBRES" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.nombre} /><input type="text" readOnly placeholder="APELLIDOS" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.apellido} /></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="TELÉFONO" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} /><input type="text" readOnly placeholder="DISTRITO" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.distrito} /></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="TELÉFONO" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} />
+                        <div className="flex flex-col">
+                            <input type="text" readOnly placeholder="DISTRITO" className={`p-3 border rounded-lg font-bold ${perfil.rol === 'super_admin' && form.distrito && form.distrito !== perfil.distrito ? 'bg-red-50 border-red-400 text-red-700' : 'bg-gray-50'}`} value={form.distrito} />
+                            {perfil.rol === 'super_admin' && form.distrito && form.distrito !== perfil.distrito && (
+                                <span className="text-[10px] font-black text-red-600 mt-1 flex items-center gap-1"><AlertTriangle size={12}/> ESTE ELECTOR NO ES DE {perfil.distrito}</span>
+                            )}
+                        </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-2 mb-4"><input type="text" readOnly className="p-3 border bg-gray-50 text-xs col-span-3 md:col-span-1" value={form.local} placeholder="LOCAL" /><input type="text" readOnly className="p-3 border bg-gray-50 font-bold" value={form.mesa ? `MESA ${form.mesa}` : "MESA"} /><input type="text" readOnly className="p-3 border-2 border-red-100 font-black text-red-600 bg-red-50" value={form.orden ? `ORDEN ${form.orden}` : "ORDEN"} /></div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">CONCEJAL</label><select className="p-4 border-2 rounded-xl font-bold outline-none" value={form.concejal} onChange={e=>setForm({...form, concejal: e.target.value})}><option value="SIN ASIGNAR">SIN ASIGNAR</option>{configApp.concejales.map(c => <option key={c} value={c}>{c.includes(' - ') ? c.split(' - ')[1] : c}</option>)}</select></div>
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COORDINADOR</label>
                             <div className="flex gap-2">
-                                {!modoNuevoCoord ? (
-                                    <><select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{coordinadoresUnicos.map(c => <option key={c} value={c}>{c}</option>)}</select><button onClick={()=>{setModoNuevoCoord(true); setForm({...form, coordinador:""})}} className="bg-slate-200 px-4 rounded-xl font-black text-xl">+</button></>
-                                ) : (
-                                    <><input type="text" className="flex-1 p-4 border-2 rounded-xl font-bold uppercase outline-none" placeholder="NUEVO..." value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value.toUpperCase()})}/><button onClick={()=>{setModoNuevoCoord(false); setForm({...form, coordinador:""})}} className="bg-red-100 text-red-700 px-4 rounded-xl font-black text-xl">×</button></>
-                                )}
+                                <select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{listaCoordinadores.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                <button type="button" onClick={()=>setModoNuevoCoord(m=>!m)} className={`px-4 rounded-xl font-black text-xl ${modoNuevoCoord?'bg-red-100 text-red-700':'bg-slate-200'}`}>{modoNuevoCoord?'×':'+'}</button>
                             </div>
+                            <label className="flex items-center gap-1 mt-1 text-[10px] font-bold text-slate-500 cursor-pointer"><input type="checkbox" checked={coordFijado} onChange={e=>setCoordFijado(e.target.checked)} /> FIJAR (carga rápida)</label>
+                            {coordFijado && form.coordinador && <span className="text-[10px] font-black text-green-600">📌 {form.coordinador}</span>}
                         </div>
                         <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COLOR</label><select className={`w-full p-4 rounded-xl font-black text-white outline-none ${form.semaforo==='VERDE'?'bg-green-500':form.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={form.semaforo} onChange={e=>setForm({...form, semaforo: e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div>
                     </div>
+                    {modoNuevoCoord && (
+                        <div className="mt-4 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
+                            <p className="text-xs font-black text-amber-800 mb-2 flex items-center gap-1"><UserPlus size={14}/> NUEVO COORDINADOR</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <input type="text" placeholder="NOMBRE" className="p-3 border-2 rounded-lg font-bold uppercase outline-none" value={nuevoCoord.nombre} onChange={e=>setNuevoCoord({...nuevoCoord, nombre: e.target.value.toUpperCase()})} />
+                                <input type="text" placeholder="LOCALIDAD" className="p-3 border-2 rounded-lg font-bold uppercase outline-none" value={nuevoCoord.localidad} onChange={e=>setNuevoCoord({...nuevoCoord, localidad: e.target.value.toUpperCase()})} />
+                                <input type="text" placeholder="TELÉFONO" className="p-3 border-2 rounded-lg font-bold outline-none" value={nuevoCoord.telefono} onChange={e=>setNuevoCoord({...nuevoCoord, telefono: e.target.value})} />
+                                <select className="p-3 border-2 rounded-lg font-bold outline-none" value={nuevoCoord.tipo} onChange={e=>setNuevoCoord({...nuevoCoord, tipo: e.target.value})}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
+                            </div>
+                            <button type="button" onClick={crearCoordinador} className="w-full mt-3 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black">CREAR COORDINADOR</button>
+                        </div>
+                    )}
                     <button onClick={handleRegistrarAdmin} className="w-full mt-6 bg-[#2ecc71] hover:bg-green-600 text-white py-4 rounded-xl font-black shadow-lg transition-colors">GUARDAR REGISTRO</button>
                 </div>
                 )
@@ -1212,8 +1211,26 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                         return cumpleTexto && cumpleConcejal && cumpleCoord && cumpleColor && cumpleDuplicado;
                     });
 
+                    // Contador por LOCAL DE VOTACIÓN (respeta los filtros activos)
+                    const conteoPorLocal = {};
+                    listaMostrar.forEach(v => { const loc = v.local || "SIN LOCAL"; conteoPorLocal[loc] = (conteoPorLocal[loc] || 0) + 1; });
+                    const localesOrdenados = Object.entries(conteoPorLocal).sort((a, b) => b[1] - a[1]);
+
                     return (
                     <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto print:hidden animate-fade-in relative">
+                        {localesOrdenados.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-[11px] font-black text-slate-500 uppercase mb-2 flex items-center gap-1"><MapPin size={12}/> Clasificación por Local de Votación ({localesOrdenados.length} locales · {listaMostrar.length} cargas)</p>
+                                <div className="flex gap-2 overflow-x-auto pb-2">
+                                    {localesOrdenados.map(([loc, n]) => (
+                                        <div key={loc} className="flex-shrink-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 min-w-[140px]">
+                                            <div className="text-2xl font-black text-red-700">{n}</div>
+                                            <div className="text-[9px] font-bold text-slate-500 uppercase leading-tight line-clamp-2">{loc}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">
                             <input type="text" placeholder="BUSCAR CÉDULA/NOMBRE" className="p-2 border rounded font-bold uppercase flex-1 w-full" value={filtroTexto} onChange={e=>{setFiltroTexto(e.target.value); setLimiteListaAdmin(100);}}/>
                             <select className="p-2 border rounded font-bold text-sm w-full md:w-auto" value={filtroConcejal} onChange={e=>{setFiltroConcejal(e.target.value); setLimiteListaAdmin(100);}}>
