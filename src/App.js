@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import './index.css';
 import { initializeApp, getApps } from "firebase/app";
-import { getDatabase, ref, push, onValue, get, set, remove, update, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
+import { getDatabase, ref, push, onValue, get, set, remove, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Eye, Camera, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, X, Calculator, TrendingUp, TrendingDown, ClipboardList, Globe, Edit2, UserPlus, ShieldAlert, Unlock, ChevronDown } from "lucide-react";
@@ -24,12 +24,12 @@ const db = getDatabase(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-const DISTRITOS_CANINDEYU = [
-    "CORPUS CHRISTI", "FRANCISCO CABALLERO ALVAREZ", "ITANARA", "KATUETE", "LA PALOMA", 
-    "LAUREL", "MARACANA", "NUEVA ESPERANZA", "PUERTO ADELA", "SALTO DEL GUAIRA", 
-    "VILLA SAN ISIDRO CURUGUATY", "VILLA YGATIMI", "YASY CAÑY", "YBY PYTA", "YBYRAROVANA", "YPE JHU"
+const DISTRITOS_CONCEPCION = [
+    "CONCEPCION", "BELEN", "HORQUETA", "LORETO", "SAN LAZARO",
+    "YBY YA'U", "AZOTEY", "SGTO.JOSE FELIX LOPEZ", "SAN CARLOS DEL APA",
+    "SAN ALFREDO", "PASO BARRETO", "ARROYITO", "PASO HORQUETA", "ITACUA"
 ];
-const NOMBRE_DEPARTAMENTO = "CANINDEYÚ";
+const NOMBRE_DEPARTAMENTO = "CONCEPCIÓN";
 
 // --- DICCIONARIO DE FOTOS LOCALES (Claves Normalizadas) ---
 const FOTOS_LOCALES_CONCEJALES = {
@@ -157,7 +157,7 @@ export default function BemoSystem() {
 
   if (!usuarioActivo) return <LoginScreen auth={auth} db={db} />;
 
-  const distritoUsuario = perfil?.distrito || DISTRITOS_CANINDEYU[0];
+  const distritoUsuario = perfil?.distrito || DISTRITOS_CONCEPCION[0];
   const configApp = configuracionDepartamental[distritoUsuario] || { intendente: `NO CONFIGURADO`, lista: "0", meta_intendente: 5000, meta_concejales: 500, concejales: [] };
   const rol = perfil?.rol;
   
@@ -184,7 +184,7 @@ function LoginScreen({ auth, db }) {
         try {
             if (isRegister) {
                 const res = await createUserWithEmailAndPassword(auth, em, ps);
-                await set(ref(db, `usuarios/${res.user.uid}`), { email: em, password_plain: ps, rol: 'master_departamental', distrito: DISTRITOS_CANINDEYU[0], nombre_oficial: 'COMANDO' });
+                await set(ref(db, `usuarios/${res.user.uid}`), { email: em, password_plain: ps, rol: 'master_departamental', distrito: DISTRITOS_CONCEPCION[0], nombre_oficial: 'COMANDO' });
                 alert("¡Cuenta creada exitosamente!");
             } else {
                 await signInWithEmailAndPassword(auth, em, ps);
@@ -222,7 +222,7 @@ function LoginScreen({ auth, db }) {
 function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental, db, distritoFiltro, usuariosOnline }) {
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const [verClaves, setVerClaves] = useState({}); const [mostrarForm, setMostrarForm] = useState(false);
-    const [nEmail, setNEmail] = useState(""); const [nClave, setNClave] = useState(""); const [nRol, setNRol] = useState("veedor"); const [nDistrito, setNDistrito] = useState(distritoFiltro === "TODOS" ? DISTRITOS_CANINDEYU[0] : distritoFiltro);
+    const [nEmail, setNEmail] = useState(""); const [nClave, setNClave] = useState(""); const [nRol, setNRol] = useState("veedor"); const [nDistrito, setNDistrito] = useState(distritoFiltro === "TODOS" ? DISTRITOS_CONCEPCION[0] : distritoFiltro);
     const [creando, setCreando] = useState(false);
 
     const usuarios = Object.entries(usuariosRegistrados).filter(([_, d]) => d?.email && (distritoFiltro === "TODOS" || d.distrito === distritoFiltro || d.rol === 'pendiente'));
@@ -247,7 +247,7 @@ function PanelUsuarios({ perfil, usuariosRegistrados, configuracionDepartamental
             <div className="flex justify-between border-b pb-4 mb-6"><h2 className="text-2xl font-black uppercase text-slate-800">ACCESOS</h2><button onClick={()=>setMostrarForm(!mostrarForm)} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold">{mostrarForm ? "CERRAR" : "+ CREAR"}</button></div>
             {mostrarForm && (
                 <form onSubmit={crearUsr} className="bg-blue-50 p-6 rounded-2xl mb-8">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><input type="email" required className="p-3 border rounded-lg" value={nEmail} onChange={e=>setNEmail(e.target.value)} placeholder="Email..." /><input type="text" required className="p-3 border rounded-lg" value={nClave} onChange={e=>setNClave(e.target.value)} placeholder="Clave..." /><select className="p-3 border rounded-lg" value={nRol} onChange={e=>setNRol(e.target.value)}><option value="veedor">VEEDOR</option><option value="dirigente">DIRIGENTE</option><option value="concejal">CONCEJAL</option><option value="super_admin">ADMIN</option></select>{esMaster && <select className="p-3 border rounded-lg uppercase" value={nDistrito} onChange={e=>setNDistrito(e.target.value)}>{DISTRITOS_CANINDEYU.map(d=><option key={d}>{d}</option>)}</select>}</div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><input type="email" required className="p-3 border rounded-lg" value={nEmail} onChange={e=>setNEmail(e.target.value)} placeholder="Email..." /><input type="text" required className="p-3 border rounded-lg" value={nClave} onChange={e=>setNClave(e.target.value)} placeholder="Clave..." /><select className="p-3 border rounded-lg" value={nRol} onChange={e=>setNRol(e.target.value)}><option value="veedor">VEEDOR</option><option value="dirigente">DIRIGENTE</option><option value="concejal">CONCEJAL</option><option value="super_admin">ADMIN</option></select>{esMaster && <select className="p-3 border rounded-lg uppercase" value={nDistrito} onChange={e=>setNDistrito(e.target.value)}>{DISTRITOS_CONCEPCION.map(d=><option key={d}>{d}</option>)}</select>}</div>
                     <button type="submit" disabled={creando} className="w-full py-3 bg-blue-600 text-white rounded-xl font-black">{creando ? "CREANDO..." : "GUARDAR"}</button>
                 </form>
             )}
@@ -307,7 +307,7 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
     return (
         <div className="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-red-700 space-y-6">
             <h2 className="text-2xl font-black border-b pb-4"><Settings className="inline mr-2 text-red-600"/>AJUSTES: {distritoGlobal}</h2>
-            {esMaster && <select className="w-full p-4 border-2 rounded-xl font-black text-lg" value={distritoGlobal} onChange={e=>setDistritoGlobal(e.target.value)}>{DISTRITOS_CANINDEYU.map(d=><option key={d}>{d}</option>)}</select>}
+            {esMaster && <select className="w-full p-4 border-2 rounded-xl font-black text-lg" value={distritoGlobal} onChange={e=>setDistritoGlobal(e.target.value)}>{DISTRITOS_CONCEPCION.map(d=><option key={d}>{d}</option>)}</select>}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-red-50 p-6 rounded-2xl">
                 <div className="col-span-full md:col-span-2"><label className="text-xs font-bold text-red-700">INTENDENTE</label><input className="w-full p-3 border rounded font-black uppercase" value={tInt} onChange={e=>setTInt(e.target.value)}/></div>
                 <div className="col-span-1"><label className="text-xs font-bold text-red-700">LISTA</label><input className="w-full p-3 border rounded font-black" value={tLis} onChange={e=>setTList(e.target.value)}/></div>
@@ -357,7 +357,7 @@ function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, d
                     ))}
                 </div>
             </div>
-            {esMaster && <button onClick={()=>{if(window.confirm("¿Restablecer todo a cero?")) { const nc={}; DISTRITOS_CANINDEYU.forEach(d=>{nc[d]={intendente:"",lista:"",meta_intendente:5000,meta_concejales:500,concejales:[]}}); set(ref(db,'configuracion'),nc); alert("Restablecido");}}} className="w-full bg-red-100 text-red-800 py-3 rounded-xl font-black mt-8 hover:bg-red-200">⚠️ RESTABLECER DEPARTAMENTO A FÁBRICA</button>}
+            {esMaster && <button onClick={()=>{if(window.confirm("¿Restablecer todo a cero?")) { const nc={}; DISTRITOS_CONCEPCION.forEach(d=>{nc[d]={intendente:"",lista:"",meta_intendente:5000,meta_concejales:500,concejales:[]}}); set(ref(db,'configuracion'),nc); alert("Restablecido");}}} className="w-full bg-red-100 text-red-800 py-3 rounded-xl font-black mt-8 hover:bg-red-200">⚠️ RESTABLECER DEPARTAMENTO A FÁBRICA</button>}
         </div>
     );
 }
@@ -446,7 +446,6 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
     const miNom = perfil.nombre_oficial||""; 
     
     const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, local:"", mesa:"", orden:"", concejal: miNom, coordinador:"", semaforo:"VERDE" });
-    const [formDirigente, setFormDirigente] = useState({ cedula: "", nombre: "" });
 
     const [bDiaD, setBDiaD] = useState(""); 
     const [resDiaD, setResDiaD] = useState(null);
@@ -471,12 +470,6 @@ function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, paso
     const [fS, setFS] = useState("TODOS"); 
     const [mNC, setMNC] = useState(false);
 
-    const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
-    const yaVotaronFiltrados = useMemo(() => {
-        const o = {}; Object.keys(yaVotaronGlobal||{}).forEach(k => { if(k.startsWith(perfil.distrito)) o[k] = yaVotaronGlobal[k]; }); return o;
-    }, [yaVotaronGlobal, perfil.distrito]);
-    const ultimosVotosFeed = useMemo(() => { return Object.entries(yaVotaronFiltrados || {}).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)).slice(0, 12).map(([llave, data]) => ({ llave, data, elector: padronLlaves[llave] })); }, [yaVotaronFiltrados, padronLlaves]);
-    
     const marcarPasoPCConcejal = (llave, pcData) => {
         if (pcData) { remove(ref(db, `dia_d/paso_pc_checkins/${llave}`)); setResDiaD({...resDiaD, pc: null}); } 
         else { const nombreConcejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom; const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}` }; set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData); setResDiaD({...resDiaD, pc: newData}); }
@@ -994,7 +987,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
         const totalSeguros = (votosSeguros || []).length;
         const totalVotaron = Object.keys(yaVotaronGlobal || {}).length;
 
-        const statsPorDistrito = DISTRITOS_CANINDEYU.map(d => {
+        const statsPorDistrito = DISTRITOS_CONCEPCION.map(d => {
             const config = configuracionDepartamental[d] || {};
             const seguros = (votosSeguros || []).filter(v => v.distrito === d).length;
             const votaron = Object.keys(yaVotaronGlobal || {}).filter(k => k.startsWith(`${d}_`)).length;
@@ -1071,7 +1064,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                                     onChange={e => setDistritoFiltroMaster(e.target.value)}
                                 >
                                     <option value="TODOS" className="bg-slate-900 font-black">🌍 VISIÓN GLOBAL ({NOMBRE_DEPARTAMENTO})</option>
-                                    {DISTRITOS_CANINDEYU.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                                    {DISTRITOS_CONCEPCION.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
                                 </select>
                             </div>
                         )}
@@ -1085,7 +1078,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     <span className="text-[10px] font-black text-blue-300">SELECCIONA VISTA O DISTRITO:</span>
                     <select className="bg-slate-700 p-2 rounded font-black text-xs cursor-pointer uppercase w-full" value={distritoFiltroMaster} onChange={e => setDistritoFiltroMaster(e.target.value)}>
                         <option value="TODOS">🌍 VISIÓN GLOBAL DEPARTAMENTAL</option>
-                        {DISTRITOS_CANINDEYU.map(d => <option key={d} value={d}>{d}</option>)}
+                        {DISTRITOS_CONCEPCION.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                 </div>
             )}

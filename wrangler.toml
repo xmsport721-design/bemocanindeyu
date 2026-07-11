@@ -1,0 +1,22 @@
+# Cloudflare Workers (Static Assets) — despliegue de la SPA React
+# Reemplaza a Netlify. Coincide con el Worker "sergiocarrillo2026".
+name = "sergiocarrillo2026"
+compatibility_date = "2026-07-10"
+
+# Sirve la carpeta build/ (salida de `npm run build`) como assets estáticos.
+# not_found_handling = single-page-application  →  todas las rutas caen a index.html
+[assets]
+directory = "./build"
+not_found_handling = "single-page-application"
+
+# --- Cómo desplegar ---
+# Opción A (Git, recomendada): en el dashboard del Worker "sergiocarrillo2026"
+#   → Settings → Build:
+#       Build command:      npm run build
+#       Deploy command:     (vacío; usa este wrangler.toml)
+#       Root directory:     /
+#   Cada push a main dispara un build automático.
+#
+# Opción B (manual desde tu PC):
+#   npm run build
+#   npx wrangler deploy

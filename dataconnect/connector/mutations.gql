@@ -1,0 +1,44 @@
+## Mutaciones para el frontend (Firebase Data Connect).
+## Se generan hooks tipados para React automáticamente.
+
+## 1) Alta/actualización completa de un elector (upsert por cédula).
+##    _upsert = INSERT ... ON CONFLICT (cedula) DO UPDATE  → no duplica.
+mutation UpsertElector(
+  $cedula: String!
+  $nombre: String!
+  $apellido: String!
+  $distrito: String
+  $local: String
+  $fechaNac: String
+  $direccion: String
+) @auth(level: USER) {
+  elector_upsert(data: {
+    cedula: $cedula
+    nombre: $nombre
+    apellido: $apellido
+    distrito: $distrito
+    local: $local
+    fechaNac: $fechaNac
+    direccion: $direccion
+  })
+}
+
+## 2) MERGE SEGURO de mesa/orden: actualiza SOLO esos dos campos.
+##    No toca nombre/apellido/distrito/local. No crea si no existe.
+mutation AsignarMesaOrden(
+  $cedula: String!
+  $mesa: String!
+  $orden: String!
+) @auth(level: USER) {
+  elector_update(key: { cedula: $cedula }, data: {
+    mesa: $mesa
+    orden: $orden
+  })
+}
+
+## 3) Consulta por cédula (para el buscador del frontend).
+query ElectorPorCedula($cedula: String!) @auth(level: USER) {
+  elector(key: { cedula: $cedula }) {
+    cedula nombre apellido distrito local mesa orden direccion
+  }
+}

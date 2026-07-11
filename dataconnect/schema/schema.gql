@@ -1,0 +1,20 @@
+## Firebase Data Connect — Esquema sobre Cloud SQL (PostgreSQL)
+## Tabla "padron" con la cédula como clave primaria (evita duplicados).
+## Mesa y orden son opcionales: se completan luego con el merge seguro.
+
+type Elector @table(name: "padron", key: ["cedula"]) {
+  cedula: String!          # clave primaria -> nunca se duplica un elector
+  nombre: String!
+  apellido: String!
+  departamento: String
+  codDistrito: String
+  distrito: String         # NOMBRE del distrito (para filtrar por usuario)
+  codLocal: String
+  local: String            # NOMBRE del local de votación
+  fechaNac: String
+  direccion: String
+  mesa: String             # vacío hasta el cruzamiento
+  orden: String            # vacío hasta el cruzamiento
+  afiliacion: String
+  actualizadoEn: Timestamp @default(expr: "request.time")
+}
