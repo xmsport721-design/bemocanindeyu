@@ -5,6 +5,7 @@ import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
+import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito } from "../../lib/padronSupabase";
 import { normalizarNombre, concejalCoincide, enviarWhatsAppCarnet, imprimirCarnetFisico } from "../../lib/helpers";
 import PanelUsuarios from "../PanelUsuarios";
 import PanelConfiguracionDepartamental from "../PanelConfiguracionDepartamental";
@@ -125,7 +126,11 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     // Rendimiento: un solo escaneo del padrón (171k) por distrito, reutilizado
     const padronDistrito = useMemo(() => Object.values(padronGlobal || {}).filter(p => p.distrito === distritoFiltroMaster), [padronGlobal, distritoFiltroMaster]);
     const padronPorMesa = useMemo(() => { const counts = {}; padronDistrito.forEach(p => { counts[p.mesa] = (counts[p.mesa] || 0) + 1; }); return counts; }, [padronDistrito]);
-    const totalPadronDistrito = padronDistrito.length;
+    const [totalPadronDistrito, setTotalPadronDistrito] = useState(0);
+    useEffect(() => {
+        if (distritoFiltroMaster === "TODOS") { setTotalPadronDistrito(0); return; }
+        contarPadronDistrito(distritoFiltroMaster).then(setTotalPadronDistrito);
+    }, [distritoFiltroMaster]);
     const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
 
     const [formVeedor, setFormVeedor] = useState({ ci: "", nombre: "", telefono: "", mesa: "", distrito: distritoFiltroMaster });
@@ -198,16 +203,12 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         }
     };
 
-    const buscarCedulaAdmin = () => { const p = (padronGlobal||{})[form.cedula]; if (p) setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); else alert("No encontrada."); };
+    const buscarCedulaAdmin = async () => { const p = await buscarPadronPorCedula(form.cedula); if (p) setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); else alert("No encontrada."); };
     
-    const buscarPorNombre = () => {
+    const buscarPorNombre = async () => {
         if(busquedaNombre.trim().length < 3) return alert("Escribe al menos 3 letras.");
-        const res = Object.entries(padronGlobal || {}).map(([ci, d]) => ({ci, ...d}))
-            .filter(p => 
-                (p.nombre + " " + p.apellido).toLowerCase().includes(busquedaNombre.toLowerCase()) &&
-                (distritoFiltroMaster === "TODOS" || perfil.rol === 'super_admin' || p.distrito === distritoFiltroMaster)
-            ).slice(0, 20);
-        
+        const distritoFiltro = (distritoFiltroMaster === "TODOS" || perfil.rol === 'super_admin') ? null : distritoFiltroMaster;
+        const res = (await buscarPadronPorNombre(busquedaNombre, distritoFiltro)).map(r => ({ ...r, ci: r.cedula }));
         if (res.length === 0) alert("No se encontraron coincidencias.");
         setResultadosNombre(res);
     };

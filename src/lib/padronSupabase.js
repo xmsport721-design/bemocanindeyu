@@ -16,6 +16,17 @@ export async function buscarPadronPorCedula(cedula) {
   return data;
 }
 
+// Conteo del padrón de un distrito (server-side, sin traer filas)
+export async function contarPadronDistrito(distrito) {
+  if (!distrito) return 0;
+  const { count, error } = await supabase
+    .from("padron")
+    .select("*", { count: "exact", head: true })
+    .eq("distrito", distrito);
+  if (error) { console.error("Supabase padrón (conteo):", error.message); return 0; }
+  return count || 0;
+}
+
 // Búsqueda por nombre/apellido (opcional: acotar por distrito). Máx 20.
 export async function buscarPadronPorNombre(texto, distrito) {
   const t = String(texto || "").trim();

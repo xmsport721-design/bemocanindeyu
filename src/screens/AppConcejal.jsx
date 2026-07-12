@@ -5,8 +5,9 @@ import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserP
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
+import { buscarPadronPorCedula, buscarPadronPorNombre } from "../lib/padronSupabase";
 
-export default function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo }) {
+export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo }) {
     const [tab, setTab] = useState("registro");
     const [menuAbierto, setMenuAbierto] = useState(false);
 
@@ -44,20 +45,24 @@ export default function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVota
         else { const nombreConcejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom; const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}` }; set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData); setResDiaD({...resDiaD, pc: newData}); }
     };
 
-    const buscarPorNombreConcejal = () => {
+    const buscarPorNombreConcejal = async () => {
         if(bNom.trim().length < 3) return alert("Escribe al menos 3 letras.");
-        const res = Object.entries(padronGlobal || {}).map(([ci, d]) => ({ci, ...d}))
-            .filter(p => p.distrito === perfil.distrito && (p.nombre + " " + p.apellido).toLowerCase().includes(bNom.toLowerCase()))
-            .slice(0, 20);
+        const res = (await buscarPadronPorNombre(bNom, perfil.distrito)).map(r => ({ ...r, ci: r.cedula }));
         if (res.length === 0) alert("No se encontraron coincidencias.");
         setResNom(res);
     };
 
-    const buscarCedulaConcejal = () => {
-        const p = (padronGlobal||{})[form.cedula];
+    const buscarCedulaConcejal = async () => {
+        const p = await buscarPadronPorCedula(form.cedula);
         if (p && p.distrito === perfil.distrito) { setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); }
         else if (p && p.distrito !== perfil.distrito) { alert("Esta persona pertenece a otro distrito."); }
         else { alert("Cédula no encontrada."); }
+    };
+
+    const buscarDiaD = async () => {
+        const p = await buscarPadronPorCedula(bDiaD);
+        if (p) setResDiaD({ ...p, v: yaVotaronGlobal[generarLlave(p.distrito, p.mesa, p.orden)], pc: pasoPCGlobal[generarLlave(p.distrito, p.mesa, p.orden)] });
+        else setResDiaD("NO");
     };
 
     const handleRegistrarConcejal = () => {
@@ -189,12 +194,8 @@ export default function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVota
                             <h2 className="font-black text-xl mb-4 text-slate-800 flex items-center gap-2"><Search className="text-red-600"/> BUSCADOR RÁPIDO DÍA D</h2>
                             <p className="text-xs text-slate-500 font-bold mb-4">Ingresa el número de cédula de cualquier elector para consultar su estado o marcar su paso por PC.</p>
                             <div className="flex gap-2 mb-6">
-                                <input type="number" placeholder="N° Cédula..." className="flex-1 p-4 border-2 rounded-xl font-bold outline-none focus:border-red-500" value={bDiaD} onChange={e=>setBDiaD(e.target.value)} />
-                                <button onClick={()=>{
-                                    const p = padronGlobal[bDiaD];
-                                    if(p) setResDiaD({...p, v:yaVotaronGlobal[generarLlave(p.distrito,p.mesa,p.orden)], pc:pasoPCGlobal[generarLlave(p.distrito,p.mesa,p.orden)]});
-                                    else setResDiaD("NO");
-                                }} className="bg-red-700 hover:bg-red-800 text-white px-6 rounded-xl font-bold transition-colors"><Search/></button>
+                                <input type="number" placeholder="N° Cédula..." className="flex-1 p-4 border-2 rounded-xl font-bold outline-none focus:border-red-500" value={bDiaD} onChange={e=>setBDiaD(e.target.value)} onKeyDown={e=>e.key==='Enter'&&buscarDiaD()} />
+                                <button onClick={buscarDiaD} className="bg-red-700 hover:bg-red-800 text-white px-6 rounded-xl font-bold transition-colors"><Search/></button>
                             </div>
 
                             {resDiaD === "NO" && <div className="p-4 bg-red-50 text-red-600 font-bold text-center rounded-xl border border-red-200">❌ Cédula no encontrada en el padrón.</div>}
@@ -202,7 +203,8 @@ export default function AppConcejal({ perfil, padronGlobal, votosSeguros, yaVota
                             {resDiaD && resDiaD !== "NO" && (
                                 <div className="border-2 border-slate-200 rounded-xl p-6 bg-slate-50">
                                     <div className="text-2xl font-black text-slate-800">{resDiaD.nombre} {resDiaD.apellido}</div>
-                                    <div className="text-sm font-bold text-gray-500 mb-6">C.I: {bDiaD} | {resDiaD.distrito}</div>
+                                    <div className="text-sm font-bold text-gray-500 mb-3">C.I: {bDiaD} | {resDiaD.distrito}</div>
+                                    <div className="bg-red-50 border-2 border-red-100 rounded-xl p-3 mb-4"><div className="text-[10px] font-black text-red-700 uppercase">📍 Local de Votación</div><div className="text-sm font-black text-slate-800 leading-tight">{resDiaD.local || '—'}</div></div>
 
                                     <div className="grid grid-cols-2 gap-4 mb-6">
                                         <div className="bg-white border shadow-sm p-3 rounded-xl text-center">

@@ -42,9 +42,9 @@ export default function BemoSystem() {
             const distritoDelUsuario = pData.distrito;
             setPerfil({ ...pData, rol: rolUsuario });
 
-            if (rolUsuario === "master_departamental" || rolUsuario === "master_global" || rolUsuario === "super_admin") {
-                get(ref(db, 'padron')).then(s => s.exists() && setPadronGlobal(s.val() || {}));
-            } else if (distritoDelUsuario) {
+            // El padrón se consulta en Supabase (point queries), no se baja entero.
+            // Solo el veedor carga su distrito desde RTDB para la lista de su mesa (Día D).
+            if (rolUsuario === "veedor" && distritoDelUsuario) {
                 const padronQuery = query(ref(db, 'padron'), orderByChild('distrito'), equalTo(distritoDelUsuario));
                 get(padronQuery).then(s => s.exists() && setPadronGlobal(s.val() || {}));
             }
