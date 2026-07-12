@@ -12,7 +12,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const [distritoFiltroMaster, setDistritoFiltroMaster] = useState(esMaster ? "TODOS" : perfil.distrito);
-    const [activeTab, setActiveTab] = useState("registro");
+    const [activeTab, setActiveTab] = useState(esMaster ? "lista" : "registro");
     const [menuAbierto, setMenuAbierto] = useState(false);
     const [concejalEnDetalle, setConcejalEnDetalle] = useState(null);
     const [mesaEnDetalle, setMesaEnDetalle] = useState(null);
@@ -122,8 +122,10 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         return Object.values(agrupados).filter(arr => arr.length > 1); 
     }, [votosFiltrados, distritoFiltroMaster]);
 
-    const padronPorMesa = useMemo(() => { const counts = {}; Object.values(padronGlobal || {}).forEach(p => { if (p.distrito === distritoFiltroMaster) counts[p.mesa] = (counts[p.mesa] || 0) + 1; }); return counts; }, [padronGlobal, distritoFiltroMaster]);
-    const totalPadronDistrito = useMemo(() => Object.values(padronGlobal || {}).filter(p => p.distrito === distritoFiltroMaster).length, [padronGlobal, distritoFiltroMaster]);
+    // Rendimiento: un solo escaneo del padrón (171k) por distrito, reutilizado
+    const padronDistrito = useMemo(() => Object.values(padronGlobal || {}).filter(p => p.distrito === distritoFiltroMaster), [padronGlobal, distritoFiltroMaster]);
+    const padronPorMesa = useMemo(() => { const counts = {}; padronDistrito.forEach(p => { counts[p.mesa] = (counts[p.mesa] || 0) + 1; }); return counts; }, [padronDistrito]);
+    const totalPadronDistrito = padronDistrito.length;
     const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
 
     const [formVeedor, setFormVeedor] = useState({ ci: "", nombre: "", telefono: "", mesa: "", distrito: distritoFiltroMaster });
@@ -445,7 +447,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                 <div className="flex items-center max-w-full pt-2 pb-2">
                     
                     <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
-                        <button onClick={() => {setActiveTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><CheckCircle size={16}/> REGISTRO</button>
+                        {!esMaster && <button onClick={() => {setActiveTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><CheckCircle size={16}/> REGISTRO</button>}
                         
                         <button onClick={() => {setActiveTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><Users size={16}/> LISTA</button>
                         
@@ -687,10 +689,11 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                             <button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[normalizarNombre(v.concejal)])} className="text-slate-700 hover:text-black"><Printer size={16}/></button>
                                             
                                             {/* BOTÓN LÁPIZ DE EDICIÓN */}
+                                            {!esMaster && (<>
                                             <button onClick={()=>{
                                                 setEditandoVotoId(v.id);
-                                                setFormEdicion({ 
-                                                    concejal: v.concejal || "SIN ASIGNAR", 
+                                                setFormEdicion({
+                                                    concejal: v.concejal || "SIN ASIGNAR",
                                                     coordinador: v.coordinador || "",
                                                     semaforo: v.semaforo || "VERDE"
                                                 });
@@ -699,6 +702,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                             </button>
 
                                             <button onClick={()=>eliminarVoto(v.id)} className="text-red-400 hover:text-red-700 border-l pl-2"><Trash2 size={16}/></button>
+                                            </>)}
                                         </div>
                                     </td>
                                 </tr>
