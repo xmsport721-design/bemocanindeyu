@@ -123,6 +123,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     }, [votosFiltrados, distritoFiltroMaster]);
 
     const padronPorMesa = useMemo(() => { const counts = {}; Object.values(padronGlobal || {}).forEach(p => { if (p.distrito === distritoFiltroMaster) counts[p.mesa] = (counts[p.mesa] || 0) + 1; }); return counts; }, [padronGlobal, distritoFiltroMaster]);
+    const totalPadronDistrito = useMemo(() => Object.values(padronGlobal || {}).filter(p => p.distrito === distritoFiltroMaster).length, [padronGlobal, distritoFiltroMaster]);
     const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
 
     const [formVeedor, setFormVeedor] = useState({ ci: "", nombre: "", telefono: "", mesa: "", distrito: distritoFiltroMaster });
@@ -136,7 +137,6 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     }, [padronGlobal, mesaEnDetalle, distritoFiltroMaster]);
 
     const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
-    const ultimosVotosFeed = useMemo(() => { return Object.entries(yaVotaronFiltrados || {}).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0)).slice(0, 8).map(([llave, data]) => ({ llave, data, elector: padronLlaves[llave] })); }, [yaVotaronFiltrados, padronLlaves]);
 
     const [mesaEscrutinioSelect, setMesaEscrutinioSelect] = useState("");
     const [formEscrutinioAdmin, setFormEscrutinioAdmin] = useState({ intendente: "", concejales: {} });
@@ -593,6 +593,30 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     listaMostrar.forEach(v => { const loc = v.local || "SIN LOCAL"; conteoPorLocal[loc] = (conteoPorLocal[loc] || 0) + 1; });
                     const localesOrdenados = Object.entries(conteoPorLocal).sort((a, b) => b[1] - a[1]);
 
+                    // VISIÓN GLOBAL: solo panorama por distrito (no se mezclan datos individuales)
+                    if (distritoFiltroMaster === "TODOS") {
+                        const porDistrito = {};
+                        votosFiltrados.forEach(v => { const d = v.distrito || "SIN DISTRITO"; porDistrito[d] = (porDistrito[d] || 0) + 1; });
+                        const totalDepto = votosFiltrados.length;
+                        return (
+                            <div className="bg-white p-6 rounded-2xl shadow border animate-fade-in">
+                                <h2 className="font-black text-xl mb-1 text-slate-800 flex items-center gap-2"><Globe className="text-blue-500"/> PANORAMA POR DISTRITO</h2>
+                                <p className="text-xs font-bold text-gray-400 mb-4">Registros cargados por cada distrito ({totalDepto} en total). Tocá un distrito para ver su detalle.</p>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {DISTRITOS_CONCEPCION.map(d => {
+                                        const n = porDistrito[d] || 0;
+                                        return (
+                                            <button key={d} onClick={() => setDistritoFiltroMaster(d)} className={`text-left border rounded-xl p-4 transition-colors ${n > 0 ? 'bg-slate-50 hover:bg-blue-50' : 'bg-white hover:bg-slate-50 opacity-70'}`}>
+                                                <div className={`text-3xl font-black ${n > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{n}</div>
+                                                <div className="text-[10px] font-black text-slate-500 uppercase mt-1 leading-tight">{d}</div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    }
+
                     return (
                     <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto print:hidden animate-fade-in relative">
                         {localesOrdenados.length > 0 && (
@@ -985,21 +1009,21 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     ) : (
                     <div className="space-y-6 animate-fade-in">
                         <div className="bg-white p-6 rounded-2xl shadow border border-t-4 border-t-red-600">
-                            <h2 className="font-black text-xl mb-4 text-slate-800 flex items-center gap-2"><Bell className="text-red-600"/> FEED EN VIVO ({distritoFiltroMaster})</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                                {ultimosVotosFeed.map((item, idx) => {
-                                    if (!item.elector) return null;
-                                    return (
-                                        <div key={idx} className="p-3 rounded-xl border bg-slate-50 flex flex-col justify-between">
-                                            <div>
-                                                <div className="font-black text-xs text-slate-800 uppercase truncate">{item.elector.nombre} {item.elector.apellido}</div>
-                                                <div className="text-[10px] text-gray-500 font-bold mt-1 uppercase">MESA: {item.elector.mesa} | VEEDOR: {item.data.veedor}</div>
-                                            </div>
-                                            <div className="text-right mt-2"><div className="text-xs font-black text-slate-600">{item.data.hora}</div></div>
-                                        </div>
-                                    )
-                                })}
-                                {ultimosVotosFeed.length === 0 && <div className="col-span-full text-center text-gray-400 font-bold py-4">Aún no hay votos registrados en {distritoFiltroMaster}.</div>}
+                            <h2 className="font-black text-xl mb-4 text-slate-800 flex items-center gap-2"><Bell className="text-red-600"/> VOTACIÓN EN VIVO ({distritoFiltroMaster})</h2>
+                            <div className="flex items-center justify-center gap-4 md:gap-8 flex-wrap">
+                                <div className="text-center">
+                                    <div className="text-5xl md:text-6xl font-black text-green-600">{totalVotosEmitidosDiaD}</div>
+                                    <div className="text-[10px] font-black text-slate-500 uppercase mt-1">Ya votaron</div>
+                                </div>
+                                <div className="text-3xl font-black text-slate-300">/</div>
+                                <div className="text-center">
+                                    <div className="text-5xl md:text-6xl font-black text-slate-700">{totalPadronDistrito}</div>
+                                    <div className="text-[10px] font-black text-slate-500 uppercase mt-1">Padrón del distrito</div>
+                                </div>
+                                <div className="text-center bg-slate-900 text-white rounded-2xl px-5 py-3">
+                                    <div className="text-3xl md:text-4xl font-black">{totalPadronDistrito > 0 ? Math.round((totalVotosEmitidosDiaD / totalPadronDistrito) * 100) : 0}%</div>
+                                    <div className="text-[9px] font-black uppercase mt-1">Participación</div>
+                                </div>
                             </div>
                         </div>
 

@@ -48,8 +48,30 @@ export default function AppVeedor({ padronGlobal, yaVotaronGlobal, mesasCerradas
                   </>
               ) : (
                   <div className="bg-white rounded-3xl shadow-xl p-4 md:p-6 border-t-8 border-slate-900">
-                      <div className="text-center mb-6"><ClipboardList size={32} className="mx-auto text-blue-600 mb-2"/><h2 className="text-xl font-black uppercase">ACTA FINAL MESA {vs.mesa}</h2></div>
-                      <button onClick={()=>{set(ref(db, `dia_d/escrutinio/${llMA}`), fEsc); alert("Acta Final Guardada en el Sistema."); setMEdEsc(false);}} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-5 rounded-xl font-black shadow-lg text-lg mt-8">GUARDAR ACTA COMPLETA</button>
+                      <div className="text-center mb-6"><ClipboardList size={32} className="mx-auto text-blue-600 mb-2"/><h2 className="text-xl font-black uppercase">ACTA FINAL MESA {vs.mesa}</h2><p className="text-[11px] font-bold text-slate-400 mt-1">Cargá los votos del acta oficial de tu mesa</p></div>
+
+                      <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 mb-4">
+                          <label className="text-xs font-black text-red-700 uppercase">Intendente: {configApp.intendente || "S/D"}</label>
+                          <input type="number" inputMode="numeric" placeholder="0" className="w-full mt-1 p-3 text-3xl font-black text-center border-2 border-red-300 rounded-xl outline-none focus:border-red-600" value={fEsc.intendente} onChange={e=>setFEsc({...fEsc, intendente: e.target.value})} />
+                      </div>
+
+                      <div className="space-y-2 mb-4">
+                          <h3 className="text-xs font-black text-slate-500 uppercase mb-2">Concejales</h3>
+                          {(configApp.concejales||[]).filter(c=>c!=="SIN ASIGNAR").map(c => (
+                              <div key={c} className="flex items-center gap-3 bg-slate-50 border rounded-xl p-2">
+                                  <span className="flex-1 font-bold text-sm uppercase leading-tight">{c.includes(' - ') ? c.split(' - ')[1] : c}</span>
+                                  <input type="number" inputMode="numeric" placeholder="0" className="w-24 p-2 text-xl font-black text-center border-2 border-blue-200 rounded-lg outline-none focus:border-blue-500" value={fEsc.concejales?.[c] || ""} onChange={e=>setFEsc({...fEsc, concejales: {...fEsc.concejales, [c]: e.target.value}})} />
+                              </div>
+                          ))}
+                          {(configApp.concejales||[]).length===0 && <p className="text-xs text-gray-400 font-bold text-center p-2">No hay concejales configurados en este distrito.</p>}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mb-2">
+                          <div><label className="text-[10px] font-black text-slate-500 uppercase">Blancos</label><input type="number" inputMode="numeric" placeholder="0" className="w-full p-2 font-black text-center border-2 rounded-lg outline-none" value={fEsc.blancos} onChange={e=>setFEsc({...fEsc, blancos: e.target.value})} /></div>
+                          <div><label className="text-[10px] font-black text-slate-500 uppercase">Nulos</label><input type="number" inputMode="numeric" placeholder="0" className="w-full p-2 font-black text-center border-2 rounded-lg outline-none" value={fEsc.nulos} onChange={e=>setFEsc({...fEsc, nulos: e.target.value})} /></div>
+                      </div>
+
+                      <button onClick={()=>{set(ref(db, `dia_d/escrutinio/${llMA}`), {...fEsc, timestamp: Date.now(), cargadoPor: vs.nombre}); alert("✅ Acta Final Guardada en el Sistema."); setMEdEsc(false);}} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-5 rounded-xl font-black shadow-lg text-lg mt-4">GUARDAR ACTA COMPLETA</button>
                   </div>
               )}
             </main>
