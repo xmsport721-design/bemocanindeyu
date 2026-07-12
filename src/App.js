@@ -633,8 +633,9 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     <div className="bg-slate-50 border p-4 rounded-xl mb-6">
                         <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">1. BUSCAR POR NOMBRE / APELLIDO (Opcional si no tienes C.I)</label>
                         <div className="flex gap-2">
-                            <input type="text" placeholder="Escribe Nombre o Apellido..." className="flex-1 p-3 border-2 rounded-xl font-bold uppercase outline-none focus:border-red-500" value={busquedaNombre} onChange={e => setBusquedaNombre(e.target.value)} onKeyDown={e => e.key === 'Enter' && buscarPorNombre()} />
-                            <button onClick={buscarPorNombre} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-6 rounded-xl font-bold transition-colors"><Search size={18}/></button>
+                            <input type="text" placeholder="Escribe Nombre o Apellido..." className="flex-1 min-w-0 p-3 border-2 rounded-xl font-bold uppercase outline-none focus:border-red-500" value={busquedaNombre} onChange={e => setBusquedaNombre(e.target.value)} onKeyDown={e => e.key === 'Enter' && buscarPorNombre()} />
+                            <button onClick={buscarPorNombre} title="Buscar" className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-5 rounded-xl font-bold transition-colors shrink-0"><Search size={18}/></button>
+                            <button onClick={()=>{setBusquedaNombre(""); setResultadosNombre([]);}} title="Nueva búsqueda" className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-4 rounded-xl font-bold transition-colors shrink-0"><RefreshCw size={18}/></button>
                         </div>
                         {resultadosNombre.length > 0 && (
                             <div className="mt-2 bg-white border border-slate-200 shadow-lg rounded-xl max-h-48 overflow-y-auto">
@@ -649,7 +650,7 @@ function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVotaronGlobal, me
                     </div>
 
                     <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">2. CARGA CON CÉDULA DE IDENTIDAD</label>
-                    <div className="flex gap-2 mb-6"><input type="number" placeholder="N° DE CÉDULA" className="flex-1 p-4 border-2 rounded-xl text-xl font-bold outline-none focus:border-red-500" value={form.cedula} onChange={e => setForm({...form, cedula: e.target.value})} onKeyDown={e => e.key === 'Enter' && buscarCedulaAdmin()} /><button onClick={buscarCedulaAdmin} className="bg-slate-800 text-white px-6 rounded-xl font-bold"><Search /></button></div>
+                    <div className="flex gap-2 mb-6"><input type="number" placeholder="N° DE CÉDULA" className="flex-1 min-w-0 p-4 border-2 rounded-xl text-xl font-bold outline-none focus:border-red-500" value={form.cedula} onChange={e => setForm({...form, cedula: e.target.value})} onKeyDown={e => e.key === 'Enter' && buscarCedulaAdmin()} /><button onClick={buscarCedulaAdmin} title="Buscar" className="bg-slate-800 text-white px-5 rounded-xl font-bold shrink-0"><Search /></button><button onClick={()=>setForm(f=>({...f, cedula:"", nombre:"", apellido:"", telefono:"", local:"", mesa:"", orden:"", distrito: distritoFiltroMaster}))} title="Nueva búsqueda" className="bg-slate-100 hover:bg-slate-200 text-slate-500 px-4 rounded-xl font-bold shrink-0"><RefreshCw size={22}/></button></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" readOnly placeholder="NOMBRES" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.nombre} /><input type="text" readOnly placeholder="APELLIDOS" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.apellido} /></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="TELÉFONO" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} />
                         <div className="flex flex-col">
