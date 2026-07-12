@@ -2,7 +2,7 @@
 # URL objetivo: control.bemo2026.workers.dev
 #   - name = "control"  -> primera parte de la URL
 #   - subdominio de cuenta "bemo2026" -> se cambia en el dashboard (afecta toda la cuenta)
-name = "control"
+name = "sergiocarrillo2026"
 compatibility_date = "2026-07-10"
 workers_dev = true
 
