@@ -9,7 +9,7 @@ export async function buscarPadronPorCedula(cedula) {
   if (!ci) return null;
   const { data, error } = await supabase
     .from("padron")
-    .select("cedula,nombre,apellido,distrito,local,mesa,orden,direccion")
+    .select("cedula,nombre,apellido,distrito,cod_local,local,mesa,orden,direccion")
     .eq("cedula", ci)
     .maybeSingle();
   if (error) { console.error("Supabase padrón (cédula):", error.message); return null; }
@@ -66,7 +66,7 @@ export async function buscarPadronPorNombre(texto, distrito) {
   const patron = `%${t}%`;
   let q = supabase
     .from("padron")
-    .select("cedula,nombre,apellido,distrito,local,mesa,orden")
+    .select("cedula,nombre,apellido,distrito,cod_local,local,mesa,orden")
     .or(`nombre.ilike.${patron},apellido.ilike.${patron}`)
     .limit(20);
   if (distrito) q = q.eq("distrito", distrito);

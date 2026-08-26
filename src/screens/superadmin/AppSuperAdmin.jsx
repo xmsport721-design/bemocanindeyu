@@ -61,7 +61,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     }, [pasoPCGlobal, distritoFiltroMaster]);
 
     const totalVotosSeguros = votosFiltrados.length;
-    const yaVotaronSeguros = votosFiltrados.filter(v => yaVotaronFiltrados[generarLlave(v.distrito, v.mesa, v.orden)]).length;
+    const yaVotaronSeguros = votosFiltrados.filter(v => yaVotaronFiltrados[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
     
     // Conteo de calidad de votos global aplicando penalización por duplicado
     const verde = votosFiltrados.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'VERDE').length;
@@ -94,7 +94,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const topPasoPC = Object.entries(rankingPasoPC).sort((a,b) => b[1] - a[1]);
     const maxPC = topPasoPC.length > 0 ? topPasoPC[0][1] : 1;
 
-    const [form, setForm] = useState({ cedula: "", nombre: "", apellido: "", telefono: "", distrito: distritoFiltroMaster, local: "", mesa: "", orden: "", concejal: "SIN ASIGNAR", coordinador: "", semaforo: "VERDE" });
+    const [form, setForm] = useState({ cedula: "", nombre: "", apellido: "", telefono: "", distrito: distritoFiltroMaster, cod_local: "", local: "", mesa: "", orden: "", concejal: "SIN ASIGNAR", coordinador: "", semaforo: "VERDE" });
     const [modoNuevoCoord, setModoNuevoCoord] = useState(false);
     const [coordFijado, setCoordFijado] = useState(false);
     const [coordinadores, setCoordinadores] = useState({});
@@ -174,7 +174,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
             .sort((a, b) => parseInt(a.orden) - parseInt(b.orden));
     }, [padronGlobal, mesaEnDetalle, distritoFiltroMaster]);
 
-    const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
+    const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
 
     const [mesaEscrutinioSelect, setMesaEscrutinioSelect] = useState("");
     const [formEscrutinioAdmin, setFormEscrutinioAdmin] = useState({ intendente: "", concejales: {} });
@@ -234,7 +234,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         }
     };
 
-    const buscarCedulaAdmin = async () => { const p = await buscarPadronPorCedula(form.cedula); if (p) setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); else alert("No encontrada."); };
+    const buscarCedulaAdmin = async () => { const p = await buscarPadronPorCedula(form.cedula); if (p) setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); else alert("No encontrada."); };
     
     const buscarPorNombre = async () => {
         if(busquedaNombre.trim().length < 3) return alert("Escribe al menos 3 letras.");
@@ -245,7 +245,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     };
 
     const seleccionarDeBuscador = (p) => {
-        setForm({...form, cedula: p.ci, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito});
+        setForm({...form, cedula: p.ci, nombre: p.nombre, apellido: p.apellido, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito});
         setResultadosNombre([]);
         setBusquedaNombre("");
     };
@@ -281,7 +281,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const exportarExcel = () => {
         let csvContent = "CÉDULA;NOMBRES;APELLIDOS;TELÉFONO;DISTRITO;LOCAL;MESA;ORDEN;CONCEJAL;COORDINADOR;COLOR;VOTÓ (DÍA D);PASÓ PC\n";
         votosFiltrados.forEach(v => {
-            const llave = generarLlave(v.distrito, v.mesa, v.orden);
+            const llave = generarLlave(v.distrito, v.cod_local, v.mesa, v.orden);
             const votoHecho = yaVotaronFiltrados[llave] ? `SÍ (${yaVotaronFiltrados[llave].hora})` : "NO";
             const pasoPC = pasoPCFiltrados[llave] ? `SÍ (${pasoPCFiltrados[llave].registradoPorNombre})` : "NO";
             const row = [v.cedula, `"${v.nombre}"`, `"${v.apellido}"`, `"${v.telefono || ""}"`, `"${v.distrito}"`, `"${v.local}"`, v.mesa, v.orden, `"${v.concejal}"`, `"${v.coordinador || ""}"`, v.semaforo, `"${votoHecho}"`, `"${pasoPC}"`].join(";");
@@ -298,7 +298,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         const delegados = {};
         misVotosDetalle.forEach(v => {
             const c = v.coordinador || "SIN ASIGNAR";
-            const llave = generarLlave(v.distrito, v.mesa, v.orden);
+            const llave = generarLlave(v.distrito, v.cod_local, v.mesa, v.orden);
             if(!delegados[c]) delegados[c] = { total: 0, votaron: 0, pasoPC: 0 };
             delegados[c].total++;
             if (yaVotaronFiltrados[llave]) delegados[c].votaron++;
@@ -306,7 +306,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         });
 
         const votosFiltradosDetalle = misVotosDetalle.filter(v => {
-            const llave = generarLlave(v.distrito, v.mesa, v.orden);
+            const llave = generarLlave(v.distrito, v.cod_local, v.mesa, v.orden);
             const votado = !!yaVotaronFiltrados[llave];
             const pasoPC = !!pasoPCFiltrados[llave];
             return (fDetCoord === "TODOS" || v.coordinador === fDetCoord) && (fDetVoto === "TODOS" || (fDetVoto === "VOTÓ" ? votado : !votado)) && (fDetPC === "TODOS" || (fDetPC === "PASÓ" ? pasoPC : !pasoPC));
@@ -352,7 +352,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     <table className="w-full text-left min-w-[800px]"><thead className="bg-slate-100 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Mesa/Ord</th><th className="p-3">Coordinador</th><th className="p-3">Día D</th></tr></thead>
                         <tbody className="divide-y text-sm">
                             {votosFiltradosDetalle.slice(0, limiteDetalleConcejal).map(v => {
-                                const llave = generarLlave(v.distrito, v.mesa, v.orden);
+                                const llave = generarLlave(v.distrito, v.cod_local, v.mesa, v.orden);
                                 const esDuplicado = cedulasDuplicadas.has(v.cedula);
                                 const semaforoReal = esDuplicado ? 'ROJO' : v.semaforo;
                                 return (
@@ -691,7 +691,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                         <table className="w-full text-left min-w-[1000px]"><thead className="bg-slate-800 text-white text-xs uppercase"><tr><th className="p-3">Votante</th><th className="p-3">Mesa/Ord</th><th className="p-3">Cargado Por</th><th className="p-3">Día D</th><th className="p-3 text-center">Acciones</th></tr></thead>
                             <tbody className="divide-y text-sm">
                             {listaMostrar.slice(0, limiteListaAdmin).map(v => {
-                                    const llave = generarLlave(v.distrito, v.mesa, v.orden);
+                                    const llave = generarLlave(v.distrito, v.cod_local, v.mesa, v.orden);
                                     
                                     // PINTA DE ROJO SI ESTÁ DUPLICADO AUTOMÁTICAMENTE
                                     const esDuplicado = cedulasDuplicadas.has(v.cedula);
@@ -983,7 +983,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                                     // USO DE LA FUNCIÓN INTELIGENTE PARA LOS CÁLCULOS
                                                     const votosDeEsteConcejal = votosFiltrados.filter(v => concejalCoincide(v.concejal, c));
                                                     const cant = votosDeEsteConcejal.length;
-                                                    const votaron = votosDeEsteConcejal.filter(v => yaVotaronFiltrados[generarLlave(v.distrito, v.mesa, v.orden)]).length;
+                                                    const votaron = votosDeEsteConcejal.filter(v => yaVotaronFiltrados[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
                                                     
                                                     const verdeC = votosDeEsteConcejal.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'VERDE').length;
                                                     const amarilloC = votosDeEsteConcejal.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'AMARILLO').length;

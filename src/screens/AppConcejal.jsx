@@ -15,7 +15,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [resNom, setResNom] = useState([]);
     const miNom = perfil.nombre_oficial||"";
 
-    const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, local:"", mesa:"", orden:"", concejal: miNom, coordinador:"", semaforo:"VERDE" });
+    const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, cod_local:"", local:"", mesa:"", orden:"", concejal: miNom, coordinador:"", semaforo:"VERDE" });
 
     const [bDiaD, setBDiaD] = useState("");
     const [resDiaD, setResDiaD] = useState(null);
@@ -54,14 +54,14 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     const buscarCedulaConcejal = async () => {
         const p = await buscarPadronPorCedula(form.cedula);
-        if (p && p.distrito === perfil.distrito) { setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); }
+        if (p && p.distrito === perfil.distrito) { setForm(prev => ({...prev, nombre: p.nombre, apellido: p.apellido, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, distrito: p.distrito})); }
         else if (p && p.distrito !== perfil.distrito) { alert("Esta persona pertenece a otro distrito."); }
         else { alert("Cédula no encontrada."); }
     };
 
     const buscarDiaD = async () => {
         const p = await buscarPadronPorCedula(bDiaD);
-        if (p) setResDiaD({ ...p, v: yaVotaronGlobal[generarLlave(p.distrito, p.mesa, p.orden)], pc: pasoPCGlobal[generarLlave(p.distrito, p.mesa, p.orden)] });
+        if (p) setResDiaD({ ...p, v: yaVotaronGlobal[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)], pc: pasoPCGlobal[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)] });
         else setResDiaD("NO");
     };
 
@@ -132,7 +132,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                             {resNom.length > 0 && (
                                 <div className="mt-2 bg-white border border-slate-200 shadow-lg rounded-xl max-h-48 overflow-y-auto">
                                     {resNom.map(r => (
-                                        <div key={r.ci} onClick={() => {setForm({...form, cedula: r.ci, nombre: r.nombre, apellido: r.apellido, local: r.local, mesa: r.mesa, orden: r.orden, distrito: r.distrito}); setResNom([]); setBNom("");}} className="p-3 hover:bg-red-50 cursor-pointer border-b last:border-b-0 text-sm flex justify-between items-center transition-colors">
+                                        <div key={r.ci} onClick={() => {setForm({...form, cedula: r.ci, nombre: r.nombre, apellido: r.apellido, cod_local: r.cod_local, local: r.local, mesa: r.mesa, orden: r.orden, distrito: r.distrito}); setResNom([]); setBNom("");}} className="p-3 hover:bg-red-50 cursor-pointer border-b last:border-b-0 text-sm flex justify-between items-center transition-colors">
                                             <div><span className="font-black">{r.nombre} {r.apellido}</span><br/><span className="text-xs text-gray-500 font-bold">C.I: {r.ci}</span></div>
                                             <div className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Mesa {r.mesa}</div>
                                         </div>
@@ -168,7 +168,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         <div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
                         <table className="w-full text-left min-w-[600px]"><thead className="bg-red-50 text-red-900 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Día D</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y text-sm">
                             {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{
-                                const vot = yaVotaronGlobal[generarLlave(v.distrito,v.mesa,v.orden)];
+                                const vot = yaVotaronGlobal[generarLlave(v.distrito,v.cod_local,v.mesa,v.orden)];
                                 const esDuplicado = cedulasDuplicadas.has(v.cedula);
                                 const semaforoReal = esDuplicado ? 'ROJO' : v.semaforo;
                                 return (
@@ -218,7 +218,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     </div>
 
                                     <div className="mt-4 border-t pt-4">
-                                        <button onClick={() => marcarPasoPCConcejal(generarLlave(resDiaD.distrito, resDiaD.mesa, resDiaD.orden), resDiaD.pc)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${resDiaD.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
+                                        <button onClick={() => marcarPasoPCConcejal(generarLlave(resDiaD.distrito, resDiaD.cod_local, resDiaD.mesa, resDiaD.orden), resDiaD.pc)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${resDiaD.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
                                             {resDiaD.pc ? <>📍 YA PASÓ POR PC ({resDiaD.pc.hora})</> : <>⏳ MARCAR "PASÓ POR PC"</>}
                                         </button>
                                     </div>
