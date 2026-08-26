@@ -1056,6 +1056,10 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                     <div className="text-5xl md:text-6xl font-black text-slate-700">{totalPadronDistrito}</div>
                                     <div className="text-[10px] font-black text-slate-500 uppercase mt-1">Padrón del distrito</div>
                                 </div>
+                                <div className="text-center border-l pl-4 md:pl-8">
+                                    <div className="text-5xl md:text-6xl font-black text-red-700">{localMesaData.locales.reduce((s, l) => s + l.mesas.length, 0)}</div>
+                                    <div className="text-[10px] font-black text-slate-500 uppercase mt-1">Mesas · {localMesaData.locales.length} locales</div>
+                                </div>
                                 <div className="text-center bg-slate-900 text-white rounded-2xl px-5 py-3">
                                     <div className="text-3xl md:text-4xl font-black">{totalPadronDistrito > 0 ? Math.round((totalVotosEmitidosDiaD / totalPadronDistrito) * 100) : 0}%</div>
                                     <div className="text-[9px] font-black uppercase mt-1">Participación</div>
