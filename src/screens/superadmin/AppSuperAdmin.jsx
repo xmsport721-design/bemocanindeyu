@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { ref, push, onValue, set, remove } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Eye, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, X, Calculator, TrendingUp, TrendingDown, ClipboardList, Globe, Edit2, UserPlus, Unlock, ChevronDown } from "lucide-react";
+import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, ChevronDown } from "lucide-react";
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
@@ -16,7 +16,6 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const [activeTab, setActiveTab] = useState(esMaster ? "lista" : "registro");
     const [menuAbierto, setMenuAbierto] = useState(false);
     const [concejalEnDetalle, setConcejalEnDetalle] = useState(null);
-    const [mesaEnDetalle, setMesaEnDetalle] = useState(null);
     const [filtroTexto, setFiltroTexto] = useState(""); 
     
     // NUEVO: Estado para el Lápiz de Edición de Voto
@@ -164,15 +163,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     };
     const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
 
-    const [formVeedor, setFormVeedor] = useState({ ci: "", nombre: "", telefono: "", mesa: "", distrito: distritoFiltroMaster });
     
-    const padronModalMesa = useMemo(() => {
-        if(!mesaEnDetalle) return [];
-        return Object.entries(padronGlobal || {})
-            .map(([ci, data]) => ({ ci, ...data }))
-            .filter(p => String(p.mesa) === String(mesaEnDetalle) && p.distrito === distritoFiltroMaster)
-            .sort((a, b) => parseInt(a.orden) - parseInt(b.orden));
-    }, [padronGlobal, mesaEnDetalle, distritoFiltroMaster]);
 
     const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
 
@@ -271,12 +262,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     
     const eliminarVoto = (id) => { if(window.confirm("⚠️ ¿Eliminar registro?")) remove(ref(db, `votos_seguros/${id}`)); };
 
-    const abrirModalMesa = (mesa) => { setMesaEnDetalle(mesa); setFormVeedor({ ci: "", nombre: "", telefono: "", mesa: String(mesa), distrito: distritoFiltroMaster }); };
-    const buscarVeedorModal = () => { const p = (padronGlobal||{})[formVeedor.ci]; if (p) setFormVeedor(prev => ({...prev, nombre: `${p.nombre} ${p.apellido}`, distrito: p.distrito})); else alert("Cédula no encontrada."); };
-    const asignarVeedorMesaModal = () => { if (!formVeedor.ci || !formVeedor.nombre) return alert("Faltan datos."); set(ref(db, `dia_d/asignaciones_veedores/${generarLlaveMesa(formVeedor.distrito, formVeedor.mesa)}`), formVeedor); alert(`✅ Mesa reasignada a ${formVeedor.nombre}.`); };
     const seleccionarMesaEscrutinio = (m) => { setMesaEscrutinioSelect(String(m)); const dataGuardada = (escrutinioGlobal || {})[generarLlaveMesa(distritoFiltroMaster, m)]; if (dataGuardada) { setFormEscrutinioAdmin(dataGuardada); } else { const initConc = {}; configApp.concejales.forEach(c => initConc[c] = ""); setFormEscrutinioAdmin({ intendente: "", concejales: initConc, rivalesIntendente: [], rivalesConcejales: [], blancos: "", nulos: "" }); } };
     const guardarEscrutinioAdmin = () => { if(!mesaEscrutinioSelect) return; set(ref(db, `dia_d/escrutinio/${generarLlaveMesa(distritoFiltroMaster, mesaEscrutinioSelect)}`), { ...formEscrutinioAdmin, timestamp: Date.now() }); alert("✅ Acta actualizada."); };
-    const reabrirMesaAdmin = (m) => { if(window.confirm(`⚠️ ¿DESBLOQUEAR MESA ${m}?\nEl veedor podrá volver a marcar votos.`)) { remove(ref(db, `dia_d/mesas_cerradas/${generarLlaveMesa(distritoFiltroMaster, m)}`)); } };
 
     const exportarExcel = () => {
         let csvContent = "CÉDULA;NOMBRES;APELLIDOS;TELÉFONO;DISTRITO;LOCAL;MESA;ORDEN;CONCEJAL;COORDINADOR;COLOR;VOTÓ (DÍA D);PASÓ PC\n";
@@ -1068,30 +1055,43 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                         </div>
 
                         <div className="bg-white p-6 rounded-2xl shadow border">
-                            <h2 className="font-black text-xl text-slate-800 mb-1 flex items-center gap-2"><MapPin className="text-red-600"/> PADRÓN POR LOCAL DE VOTACIÓN ({distritoFiltroMaster})</h2>
-                            <p className="text-xs text-gray-500 font-bold mb-4">{localMesaData.locales.length} locales · {localMesaData.totalDistrito.toLocaleString()} electores. Cada local tiene sus propias mesas (Mesa 1, 2, 3…) — no se mezclan entre instituciones.</p>
-                            <div className="space-y-4">
-                                {localMesaData.locales.map(loc => (
-                                    <div key={loc.cod_local} className="border rounded-xl overflow-hidden">
-                                        <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center gap-3">
-                                            <div className="font-black text-sm uppercase leading-tight">{loc.local}</div>
-                                            <div className="text-right shrink-0"><div className="text-2xl font-black leading-none">{loc.total.toLocaleString()}</div><div className="text-[9px] uppercase text-slate-300 mt-0.5">electores · {loc.mesas.length} mesas</div></div>
-                                        </div>
-                                        <div className="p-3 flex flex-wrap gap-2">
-                                            {loc.mesas.map(m => {
-                                                const asig = (asignacionesVeedores || {})[claveMesaLocal(loc.cod_local, m.mesa)];
-                                                return (
-                                                <button key={m.mesa} onClick={() => abrirMesaLocal(loc, m)} title="Ver padrón / asignar encargado" className={`border rounded-lg px-3 py-1.5 text-center min-w-[68px] transition-colors ${asig ? 'bg-green-50 border-green-300 hover:bg-green-100' : 'bg-slate-50 hover:bg-red-50'}`}>
-                                                    <div className="text-[9px] font-black text-slate-400 uppercase">Mesa {m.mesa}</div>
-                                                    <div className="text-lg font-black text-slate-800 leading-none">{m.cantidad}</div>
-                                                    {asig && <div className="text-[8px] font-black text-green-600 mt-0.5 truncate max-w-[60px]">✓ {String(asig.nombre || '').split(' ')[0]}</div>}
-                                                </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ))}
-                                {localMesaData.locales.length === 0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Cargando padrón por local de {distritoFiltroMaster}… (si no aparece, corré el SQL de la función en Supabase)</div>}
+                            <h2 className="font-black text-xl text-slate-800 mb-1 flex items-center gap-2"><MapPin className="text-red-600"/> LOCALES DE VOTACIÓN ({distritoFiltroMaster})</h2>
+                            <p className="text-xs text-gray-500 font-bold mb-4">{localMesaData.locales.length} locales · {localMesaData.locales.reduce((s, l) => s + l.mesas.length, 0)} mesas · {localMesaData.totalDistrito.toLocaleString()} electores.</p>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-100 text-[10px] uppercase text-slate-500"><tr><th className="p-2">Local de Votación</th><th className="p-2 text-center">Mesas</th><th className="p-2 text-center">Electores</th></tr></thead>
+                                    <tbody className="divide-y">
+                                        {localMesaData.locales.map(loc => (
+                                            <tr key={loc.cod_local} className="hover:bg-slate-50"><td className="p-2 font-bold uppercase">{loc.local}</td><td className="p-2 text-center font-black text-red-600">{loc.mesas.length}</td><td className="p-2 text-center font-bold">{loc.total.toLocaleString()}</td></tr>
+                                        ))}
+                                        {localMesaData.locales.length === 0 && <tr><td colSpan="3" className="text-center text-gray-400 font-bold p-4">Cargando… (si no aparece, corré el SQL de la función en Supabase)</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow border">
+                            <h2 className="font-black text-xl text-slate-800">MONITOR DE MESAS ({distritoFiltroMaster})</h2>
+                            <p className="text-xs text-gray-500 font-bold mb-4">Tocá una mesa para ver su padrón (habilitados) y asignar el encargado. Cada cuadro muestra su institución y estado.</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {localMesaData.locales.flatMap(loc => loc.mesas.map(m => ({ mesa: m.mesa, cantidad: m.cantidad, cod_local: loc.cod_local, local: loc.local }))).map(m => {
+                                    const clave = claveMesaLocal(m.cod_local, m.mesa);
+                                    const asig = (asignacionesVeedores || {})[clave];
+                                    const cerrada = (mesasCerradas || {})[clave];
+                                    const online = asig && (veedoresOnline || {})[asig.ci];
+                                    let bg = "bg-gray-50 border-gray-300", st = "SIN ASIGNAR", stColor = "text-gray-400", ic = <WifiOff size={14} className="text-gray-400"/>;
+                                    if (asig) { bg = online ? "bg-green-50 border-green-500" : "bg-blue-50 border-blue-300"; st = online ? "● ONLINE" : String(asig.nombre || "ASIGNADO"); stColor = online ? "text-green-700" : "text-blue-600"; ic = online ? <Wifi size={14} className="text-green-600"/> : <WifiOff size={14} className="text-blue-400"/>; }
+                                    if (cerrada) { bg = "bg-slate-800 border-black text-white"; st = "CERRADA"; stColor = "text-red-300"; ic = <Lock size={14} className="text-red-500"/>; }
+                                    return (
+                                        <button key={clave} onClick={() => abrirMesaLocal({ cod_local: m.cod_local, local: m.local }, m)} className={`p-4 rounded-xl border-2 text-left transition-all hover:border-red-500 hover:shadow-md ${bg}`}>
+                                            <div className="flex justify-between items-start"><div className="text-4xl font-black leading-none">{m.mesa}</div>{ic}</div>
+                                            <div className="text-[9px] font-black uppercase mt-2 leading-tight opacity-80 h-6 overflow-hidden">{m.local}</div>
+                                            <div className="text-[10px] font-bold mt-1 opacity-70">HAB: {m.cantidad}</div>
+                                            <div className={`text-[9px] font-black uppercase mt-1 truncate ${stColor}`}>{st}</div>
+                                        </button>
+                                    );
+                                })}
+                                {localMesaData.locales.length === 0 && <div className="col-span-full text-center text-gray-400 font-bold p-6">Seleccioná un distrito con datos.</div>}
                             </div>
                         </div>
 
@@ -1133,157 +1133,6 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                             </div>
                         )}
 
-                        <div className="bg-white p-6 rounded-2xl shadow border">
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
-                                <div>
-                                    <h2 className="font-black text-xl text-slate-800">MONITOR DE MESAS ({distritoFiltroMaster})</h2>
-                                    <p className="text-xs text-gray-500 font-bold">Haz clic en una mesa para ver su padrón completo o sustituir al Veedor.</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                {mesasDelDistrito.map(mesa => {
-                                    const llaveMesa = generarLlaveMesa(distritoFiltroMaster, mesa);
-                                    const asignado = (asignacionesVeedores||{})[llaveMesa];
-                                    const cerrada = (mesasCerradas||{})[llaveMesa];
-                                    const isOnline = asignado && (veedoresOnline||{})[asignado.ci];
-                                    
-                                    const totalHab = padronPorMesa[mesa] || 0;
-                                    const votosDeEstaMesa = Object.keys(yaVotaronFiltrados).filter(k => k.startsWith(`${distritoFiltroMaster}_${mesa}_`)).length;
-                                    const porcentaje = totalHab > 0 ? Math.round((votosDeEstaMesa / totalHab) * 100) : 0;
-
-                                    let statusBg = "bg-gray-100 border-gray-300"; 
-                                    let icon = <WifiOff size={14} className="text-gray-400"/>;
-                                    let statusText = "SIN ASIGNAR";
-
-                                    if (asignado) {
-                                        statusBg = isOnline ? "bg-green-100 border-green-500 shadow-md scale-105 z-10 relative" : "bg-blue-50 border-blue-300";
-                                        icon = isOnline ? <Wifi size={14} className="text-green-600 animate-pulse"/> : <WifiOff size={14} className="text-blue-400"/>;
-                                        statusText = isOnline ? "ONLINE" : "OFFLINE";
-                                    }
-                                    if (cerrada) {
-                                        statusBg = "bg-slate-800 border-black text-white";
-                                        icon = <Lock size={14} className="text-red-500"/>;
-                                        statusText = "CERRADA";
-                                    }
-
-                                    return (
-                                        <div key={mesa} onClick={() => abrirModalMesa(mesa)} className={`p-4 rounded-xl border-2 flex flex-col justify-between cursor-pointer transition-all hover:border-red-500 group relative ${statusBg}`}>
-                                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-red-600 text-white text-[8px] px-1 py-0.5 rounded flex items-center gap-1 font-black shadow"><Eye size={8}/> VER</div>
-                                            
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="text-3xl font-black leading-none">{mesa}</div>
-                                                <div className="text-right">{icon}<div className={`text-[10px] font-black mt-1 ${cerrada ? 'text-red-400' : 'text-blue-600'}`}>{porcentaje}%</div></div>
-                                            </div>
-                                            
-                                            <div className="w-full bg-black/10 h-1.5 mb-2 rounded-full overflow-hidden">
-                                                <div className={`${cerrada ? 'bg-red-500' : 'bg-blue-500'} h-full`} style={{width: `${porcentaje}%`}}></div>
-                                            </div>
-
-                                            <div className="flex justify-between text-[10px] font-black text-gray-500 border-b border-black/10 pb-1 mb-2">
-                                                <span>HAB: {totalHab}</span><span className={cerrada?"text-red-400":"text-green-600"}>VOT: {votosDeEstaMesa}</span>
-                                            </div>
-                                            <div className="text-[10px] font-bold uppercase truncate flex items-center justify-between">
-                                                <span className="truncate mr-1">{asignado ? asignado.nombre.split(" ")[0] : '-'}</span>
-                                                <span className={isOnline && !cerrada ? "text-green-600" : ""}>{statusText}</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* LISTA DE VEEDORES (RESPONSABLES) */}
-                        <div className="bg-white p-6 rounded-2xl shadow border">
-                            <h3 className="font-black text-lg mb-4 flex items-center gap-2"><Users className="text-blue-600"/> RESPONSABLES DE MESA</h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-xs">
-                                    <thead className="bg-slate-100 uppercase"><tr><th className="p-2">Mesa</th><th className="p-2">Nombre Responsable</th><th className="p-2">Cédula</th><th className="p-2">Teléfono</th><th className="p-2">Estado</th></tr></thead>
-                                    <tbody className="divide-y font-bold">
-                                        {Object.entries(asignacionesVeedores).filter(([k]) => k.startsWith(distritoFiltroMaster)).map(([k, v]) => (
-                                            <tr key={k} className="hover:bg-slate-50"><td className="p-2 text-red-600">{v.mesa}</td><td className="p-2">{v.nombre}</td><td className="p-2">{v.ci}</td><td className="p-2">{v.telefono || '-'}</td><td className="p-2">{veedoresOnline[v.ci] ? <span className="text-green-600">● ONLINE</span> : <span className="text-gray-300">OFFLINE</span>}</td></tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {mesaEnDetalle && (() => {
-                            const llaveMesaAct = generarLlaveMesa(distritoFiltroMaster, mesaEnDetalle);
-                            const veedorAsignado = asignacionesVeedores[llaveMesaAct];
-                            const isCerrada = mesasCerradas[llaveMesaAct];
-
-                            return (
-                                <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex justify-center p-4 md:p-8 overflow-y-auto animate-fade-in">
-                                    <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl relative flex flex-col h-max min-h-[80vh] border-t-8 border-red-600">
-                                        <button onClick={()=>setMesaEnDetalle(null)} className="absolute top-4 right-4 bg-slate-100 hover:bg-red-100 hover:text-red-600 p-2 rounded-full transition-colors"><X size={24}/></button>
-                                        
-                                        <div className="p-6 border-b">
-                                            <h2 className="text-3xl font-black text-slate-800">RADIOGRAFÍA MESA {mesaEnDetalle}</h2>
-                                            <p className="text-sm font-bold text-gray-500 uppercase">{distritoFiltroMaster}</p>
-                                        </div>
-
-                                        <div className="flex flex-col lg:flex-row gap-6 p-6">
-                                            <div className="w-full lg:w-1/3 space-y-4">
-                                                
-                                                <div className="bg-slate-100 p-5 rounded-2xl border border-slate-300 shadow-inner">
-                                                    <h3 className="font-black text-xs text-slate-500 mb-2 uppercase flex items-center gap-1"><Users size={14}/> Responsable Actual</h3>
-                                                    {veedorAsignado ? (
-                                                        <div>
-                                                            <div className="font-black text-lg text-slate-800 uppercase">{veedorAsignado.nombre}</div>
-                                                            <div className="text-xs font-bold text-slate-600 mt-1">C.I: {veedorAsignado.ci} | Tel: {veedorAsignado.telefono || '-'}</div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-sm font-black text-red-500 bg-red-100 px-3 py-2 rounded-lg inline-block">MESA SIN VEEDOR</div>
-                                                    )}
-                                                </div>
-
-                                                <div className="bg-blue-50 p-6 rounded-2xl border border-blue-200">
-                                                    <h3 className="font-black text-lg mb-4 text-blue-900 flex items-center gap-2"><RefreshCw size={18}/> ASIGNAR / SUSTITUIR</h3>
-                                                    <p className="text-xs text-blue-700 font-bold mb-4">La mesa actual se asignará a este número de cédula.</p>
-                                                    <div className="flex gap-2 mb-4"><input type="number" placeholder="Cédula..." className="flex-1 p-3 border-2 border-blue-300 rounded-xl font-bold outline-none" value={formVeedor.ci} onChange={e=>setFormVeedor({...formVeedor, ci: e.target.value})} /><button onClick={buscarVeedorModal} className="bg-blue-800 text-white px-4 rounded-xl font-bold"><Search size={18}/></button></div>
-                                                    <input type="text" readOnly placeholder="NOMBRES" className="w-full p-3 border rounded-xl bg-white font-bold text-blue-900 mb-4" value={formVeedor.nombre} />
-                                                    <input type="number" placeholder="TELÉFONO" className="w-full p-3 border-2 border-blue-300 rounded-xl font-bold outline-none mb-4" value={formVeedor.telefono} onChange={e=>setFormVeedor({...formVeedor, telefono: e.target.value})} />
-                                                    <button onClick={asignarVeedorMesaModal} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black shadow-lg">GUARDAR ASIGNACIÓN</button>
-                                                </div>
-                                                
-                                                {isCerrada && (
-                                                    <div className="bg-red-50 p-6 rounded-2xl border border-red-200 text-center">
-                                                        <div className="text-red-700 font-black text-sm mb-4 uppercase">Esta mesa está BLOQUEADA (Escrutinio cerrado)</div>
-                                                        <button onClick={()=>reabrirMesaAdmin(mesaEnDetalle)} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-xl font-black shadow flex justify-center items-center gap-2"><Unlock size={18}/> DESBLOQUEAR MESA</button>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="w-full lg:w-2/3 bg-slate-50 border rounded-2xl p-4 overflow-hidden flex flex-col h-[60vh]">
-                                                <h3 className="font-black text-lg mb-2 flex items-center gap-2"><ClipboardList/> PADRÓN DE MESA ({padronModalMesa.length})</h3>
-                                                <div className="overflow-y-auto flex-1 rounded-xl border border-slate-200 bg-white">
-                                                    <table className="w-full text-left">
-                                                        <thead className="bg-slate-800 text-white text-[10px] uppercase sticky top-0 z-10"><tr><th className="p-3 text-center">Ord</th><th className="p-3">Elector</th><th className="p-3">Estado</th><th className="p-3">Voto Seguro de</th></tr></thead>
-                                                        <tbody className="divide-y text-sm">
-                                                            {padronModalMesa.map(v => {
-                                                                const llaveVoto = generarLlave(distritoFiltroMaster, mesaEnDetalle, v.orden);
-                                                                const votado = yaVotaronFiltrados[llaveVoto];
-                                                                const esSeguroDe = votosFiltrados.find(vs => String(vs.cedula) === String(v.ci));
-
-                                                                return (
-                                                                    <tr key={v.ci} className={votado ? 'bg-green-50/50' : 'hover:bg-slate-50'}>
-                                                                        <td className="p-3 text-center font-black text-gray-400">{v.orden}</td>
-                                                                        <td className="p-3 leading-tight"><div className={`font-black text-xs ${votado ? 'text-green-800' : 'text-slate-800'}`}>{v.nombre} {v.apellido}</div><div className="text-[9px] text-gray-500 font-bold mt-1">C.I: {v.ci}</div></td>
-                                                                        <td className="p-3">{votado ? <span className="bg-green-100 text-green-700 font-black text-[9px] px-2 py-1 rounded">✅ VOTÓ ({votado.hora})</span> : <span className="bg-gray-100 text-gray-400 font-bold text-[9px] px-2 py-1 rounded">PENDIENTE</span>}</td>
-                                                                        <td className="p-3 font-bold text-[10px] uppercase">{esSeguroDe ? <span className="text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100">⭐ {esSeguroDe.concejal}</span> : <span className="text-gray-300">-</span>}</td>
-                                                                    </tr>
-                                                                )
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
                     </div>
                     )
                 )}
