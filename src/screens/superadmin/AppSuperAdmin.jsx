@@ -5,7 +5,7 @@ import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
-import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito } from "../../lib/padronSupabase";
+import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito, padronPorLocalMesa } from "../../lib/padronSupabase";
 import { normalizarNombre, concejalCoincide, enviarWhatsAppCarnet, imprimirCarnetFisico } from "../../lib/helpers";
 import PanelUsuarios from "../PanelUsuarios";
 import PanelConfiguracionDepartamental from "../PanelConfiguracionDepartamental";
@@ -127,9 +127,11 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const padronDistrito = useMemo(() => Object.values(padronGlobal || {}).filter(p => p.distrito === distritoFiltroMaster), [padronGlobal, distritoFiltroMaster]);
     const padronPorMesa = useMemo(() => { const counts = {}; padronDistrito.forEach(p => { counts[p.mesa] = (counts[p.mesa] || 0) + 1; }); return counts; }, [padronDistrito]);
     const [totalPadronDistrito, setTotalPadronDistrito] = useState(0);
+    const [localMesaData, setLocalMesaData] = useState({ locales: [], totalDistrito: 0 });
     useEffect(() => {
-        if (distritoFiltroMaster === "TODOS") { setTotalPadronDistrito(0); return; }
+        if (distritoFiltroMaster === "TODOS") { setTotalPadronDistrito(0); setLocalMesaData({ locales: [], totalDistrito: 0 }); return; }
         contarPadronDistrito(distritoFiltroMaster).then(setTotalPadronDistrito);
+        padronPorLocalMesa(distritoFiltroMaster).then(setLocalMesaData);
     }, [distritoFiltroMaster]);
     const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
 
@@ -1029,6 +1031,30 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                     <div className="text-3xl md:text-4xl font-black">{totalPadronDistrito > 0 ? Math.round((totalVotosEmitidosDiaD / totalPadronDistrito) * 100) : 0}%</div>
                                     <div className="text-[9px] font-black uppercase mt-1">Participación</div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow border">
+                            <h2 className="font-black text-xl text-slate-800 mb-1 flex items-center gap-2"><MapPin className="text-red-600"/> PADRÓN POR LOCAL DE VOTACIÓN ({distritoFiltroMaster})</h2>
+                            <p className="text-xs text-gray-500 font-bold mb-4">{localMesaData.locales.length} locales · {localMesaData.totalDistrito.toLocaleString()} electores. Cada local tiene sus propias mesas (Mesa 1, 2, 3…) — no se mezclan entre instituciones.</p>
+                            <div className="space-y-4">
+                                {localMesaData.locales.map(loc => (
+                                    <div key={loc.cod_local} className="border rounded-xl overflow-hidden">
+                                        <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center gap-3">
+                                            <div className="font-black text-sm uppercase leading-tight">{loc.local}</div>
+                                            <div className="text-right shrink-0"><div className="text-2xl font-black leading-none">{loc.total.toLocaleString()}</div><div className="text-[9px] uppercase text-slate-300 mt-0.5">electores · {loc.mesas.length} mesas</div></div>
+                                        </div>
+                                        <div className="p-3 flex flex-wrap gap-2">
+                                            {loc.mesas.map(m => (
+                                                <div key={m.mesa} className="bg-slate-50 border rounded-lg px-3 py-1.5 text-center min-w-[68px]">
+                                                    <div className="text-[9px] font-black text-slate-400 uppercase">Mesa {m.mesa}</div>
+                                                    <div className="text-lg font-black text-slate-800 leading-none">{m.cantidad}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {localMesaData.locales.length === 0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Cargando padrón por local de {distritoFiltroMaster}… (si no aparece, corré el SQL de la función en Supabase)</div>}
                             </div>
                         </div>
 

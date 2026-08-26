@@ -16,6 +16,27 @@ export async function buscarPadronPorCedula(cedula) {
   return data;
 }
 
+// Electores por LOCAL (institución) y MESA de un distrito (agregado server-side vía RPC).
+// Devuelve { locales: [{cod_local, local, total, mesas:[{mesa, cantidad}]}], totalDistrito }
+export async function padronPorLocalMesa(distrito) {
+  if (!distrito || distrito === "TODOS") return { locales: [], totalDistrito: 0 };
+  const { data, error } = await supabase.rpc("padron_por_local_mesa", { dist: distrito });
+  if (error) { console.error("Supabase padrón por local/mesa:", error.message); return { locales: [], totalDistrito: 0 }; }
+  const porLocal = {};
+  let totalDistrito = 0;
+  (data || []).forEach(r => {
+    const key = r.cod_local || "0";
+    if (!porLocal[key]) porLocal[key] = { cod_local: key, local: r.local || "SIN LOCAL", total: 0, mesas: [] };
+    porLocal[key].mesas.push({ mesa: r.mesa, cantidad: Number(r.cantidad) });
+    porLocal[key].total += Number(r.cantidad);
+    totalDistrito += Number(r.cantidad);
+  });
+  const locales = Object.values(porLocal)
+    .map(l => ({ ...l, mesas: l.mesas.sort((a, b) => (parseInt(a.mesa) || 0) - (parseInt(b.mesa) || 0)) }))
+    .sort((a, b) => (parseInt(a.cod_local) || 0) - (parseInt(b.cod_local) || 0));
+  return { locales, totalDistrito };
+}
+
 // Conteo del padrón de un distrito (server-side, sin traer filas)
 export async function contarPadronDistrito(distrito) {
   if (!distrito) return 0;
