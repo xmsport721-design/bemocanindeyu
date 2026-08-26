@@ -5,7 +5,7 @@ import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
-import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito, padronPorLocalMesa } from "../../lib/padronSupabase";
+import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito, padronPorLocalMesa, padronDeMesa } from "../../lib/padronSupabase";
 import { normalizarNombre, concejalCoincide, enviarWhatsAppCarnet, imprimirCarnetFisico } from "../../lib/helpers";
 import PanelUsuarios from "../PanelUsuarios";
 import PanelConfiguracionDepartamental from "../PanelConfiguracionDepartamental";
@@ -133,6 +133,35 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         contarPadronDistrito(distritoFiltroMaster).then(setTotalPadronDistrito);
         padronPorLocalMesa(distritoFiltroMaster).then(setLocalMesaData);
     }, [distritoFiltroMaster]);
+
+    // --- Mesa por local: ver padrón (habilitados) + asignar encargado ---
+    const [mesaSel, setMesaSel] = useState(null); // { cod_local, local, mesa }
+    const [mesaSelPadron, setMesaSelPadron] = useState([]);
+    const [cargandoMesa, setCargandoMesa] = useState(false);
+    const [encargadoForm, setEncargadoForm] = useState({ ci: "", nombre: "", telefono: "" });
+    const claveMesaLocal = (cl, m) => `${distritoFiltroMaster}_${cl}_${m}`.toUpperCase().replace(/[.$#[\]/]/g, "").trim();
+
+    const abrirMesaLocal = async (loc, m) => {
+        setMesaSel({ cod_local: loc.cod_local, local: loc.local, mesa: m.mesa });
+        setEncargadoForm({ ci: "", nombre: "", telefono: "" });
+        setMesaSelPadron([]); setCargandoMesa(true);
+        const p = await padronDeMesa(distritoFiltroMaster, loc.cod_local, m.mesa);
+        setMesaSelPadron(p); setCargandoMesa(false);
+    };
+    const buscarEncargado = async () => {
+        const p = await buscarPadronPorCedula(encargadoForm.ci);
+        if (p) setEncargadoForm(f => ({ ...f, nombre: `${p.nombre} ${p.apellido}` }));
+        else alert("Cédula no encontrada en el padrón.");
+    };
+    const asignarEncargado = () => {
+        if (!encargadoForm.ci || !encargadoForm.nombre) return alert("Ingresá la cédula del encargado y buscá su nombre.");
+        set(ref(db, `dia_d/asignaciones_veedores/${claveMesaLocal(mesaSel.cod_local, mesaSel.mesa)}`), {
+            ci: encargadoForm.ci, nombre: encargadoForm.nombre, telefono: encargadoForm.telefono,
+            distrito: distritoFiltroMaster, cod_local: mesaSel.cod_local, local: mesaSel.local, mesa: mesaSel.mesa,
+        });
+        alert(`✅ ${encargadoForm.nombre} asignado a Mesa ${mesaSel.mesa} de ${mesaSel.local}.`);
+        setEncargadoForm({ ci: "", nombre: "", telefono: "" });
+    };
     const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
 
     const [formVeedor, setFormVeedor] = useState({ ci: "", nombre: "", telefono: "", mesa: "", distrito: distritoFiltroMaster });
@@ -1045,18 +1074,60 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                             <div className="text-right shrink-0"><div className="text-2xl font-black leading-none">{loc.total.toLocaleString()}</div><div className="text-[9px] uppercase text-slate-300 mt-0.5">electores · {loc.mesas.length} mesas</div></div>
                                         </div>
                                         <div className="p-3 flex flex-wrap gap-2">
-                                            {loc.mesas.map(m => (
-                                                <div key={m.mesa} className="bg-slate-50 border rounded-lg px-3 py-1.5 text-center min-w-[68px]">
+                                            {loc.mesas.map(m => {
+                                                const asig = (asignacionesVeedores || {})[claveMesaLocal(loc.cod_local, m.mesa)];
+                                                return (
+                                                <button key={m.mesa} onClick={() => abrirMesaLocal(loc, m)} title="Ver padrón / asignar encargado" className={`border rounded-lg px-3 py-1.5 text-center min-w-[68px] transition-colors ${asig ? 'bg-green-50 border-green-300 hover:bg-green-100' : 'bg-slate-50 hover:bg-red-50'}`}>
                                                     <div className="text-[9px] font-black text-slate-400 uppercase">Mesa {m.mesa}</div>
                                                     <div className="text-lg font-black text-slate-800 leading-none">{m.cantidad}</div>
-                                                </div>
-                                            ))}
+                                                    {asig && <div className="text-[8px] font-black text-green-600 mt-0.5 truncate max-w-[60px]">✓ {String(asig.nombre || '').split(' ')[0]}</div>}
+                                                </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 ))}
                                 {localMesaData.locales.length === 0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Cargando padrón por local de {distritoFiltroMaster}… (si no aparece, corré el SQL de la función en Supabase)</div>}
                             </div>
                         </div>
+
+                        {mesaSel && (
+                            <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={()=>setMesaSel(null)}>
+                                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border-t-8 border-red-600" onClick={e=>e.stopPropagation()}>
+                                    <div className="p-5 border-b flex justify-between items-start gap-3">
+                                        <div>
+                                            <div className="text-[10px] font-black text-red-600 uppercase">Mesa {mesaSel.mesa}</div>
+                                            <div className="font-black text-slate-800 leading-tight uppercase">{mesaSel.local}</div>
+                                            <div className="text-xs font-bold text-slate-400">{mesaSelPadron.length} habilitados</div>
+                                        </div>
+                                        <button onClick={()=>setMesaSel(null)} className="text-2xl font-black text-slate-400 hover:text-red-600 leading-none">✕</button>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 border-b">
+                                        <p className="text-[11px] font-black text-slate-500 uppercase mb-2">Encargado de esta mesa</p>
+                                        {(() => { const asig = (asignacionesVeedores||{})[claveMesaLocal(mesaSel.cod_local, mesaSel.mesa)]; return asig ? (
+                                            <div className="bg-green-50 border border-green-200 rounded-xl p-2 text-xs font-bold text-green-800 mb-2">✓ Asignado: {asig.nombre} (C.I {asig.ci}{asig.telefono ? ` · ${asig.telefono}` : ''})</div>
+                                        ) : null; })()}
+                                        <div className="flex gap-2">
+                                            <input type="number" placeholder="C.I del encargado" className="flex-1 p-2 border-2 rounded-lg font-bold text-sm outline-none" value={encargadoForm.ci} onChange={e=>setEncargadoForm({...encargadoForm, ci:e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarEncargado()} />
+                                            <button onClick={buscarEncargado} className="bg-slate-700 text-white px-3 rounded-lg text-sm font-bold">Buscar</button>
+                                        </div>
+                                        {encargadoForm.nombre && <div className="text-xs font-black text-slate-700 mt-2">{encargadoForm.nombre}</div>}
+                                        <div className="flex gap-2 mt-2">
+                                            <input type="number" placeholder="Teléfono (opcional)" className="flex-1 p-2 border-2 rounded-lg font-bold text-sm outline-none" value={encargadoForm.telefono} onChange={e=>setEncargadoForm({...encargadoForm, telefono:e.target.value})} />
+                                            <button onClick={asignarEncargado} className="bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-lg text-sm font-black">ASIGNAR</button>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-y-auto p-4">
+                                        {cargandoMesa ? <div className="text-center text-gray-400 font-bold p-6">Cargando padrón de la mesa…</div> : (
+                                            <table className="w-full text-left text-sm"><thead className="text-[10px] uppercase text-slate-400 sticky top-0 bg-white"><tr><th className="p-1">Ord</th><th className="p-1">Nombre y Apellido</th><th className="p-1">C.I</th></tr></thead>
+                                            <tbody className="divide-y">
+                                                {mesaSelPadron.map(el => (<tr key={el.cedula}><td className="p-1 font-black text-slate-400">{el.orden}</td><td className="p-1 font-bold">{el.nombre} {el.apellido}</td><td className="p-1 text-xs text-slate-500">{el.cedula}</td></tr>))}
+                                            </tbody></table>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="bg-white p-6 rounded-2xl shadow border">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">

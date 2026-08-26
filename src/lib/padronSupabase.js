@@ -37,6 +37,17 @@ export async function padronPorLocalMesa(distrito) {
   return { locales, totalDistrito };
 }
 
+// Padrón de UNA mesa puntual (distrito + local + mesa) — los habilitados, ordenados por orden.
+export async function padronDeMesa(distrito, codLocal, mesa) {
+  const { data, error } = await supabase
+    .from("padron")
+    .select("cedula,nombre,apellido,orden")
+    .eq("distrito", distrito).eq("cod_local", String(codLocal)).eq("mesa", String(mesa))
+    .limit(1000);
+  if (error) { console.error("Supabase padrón de mesa:", error.message); return []; }
+  return (data || []).sort((a, b) => (parseInt(a.orden) || 0) - (parseInt(b.orden) || 0));
+}
+
 // Conteo del padrón de un distrito (server-side, sin traer filas)
 export async function contarPadronDistrito(distrito) {
   if (!distrito) return 0;
