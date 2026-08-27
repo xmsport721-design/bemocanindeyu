@@ -122,9 +122,6 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         return Object.values(agrupados).filter(arr => arr.length > 1); 
     }, [votosFiltrados, distritoFiltroMaster]);
 
-    // Rendimiento: un solo escaneo del padrón (171k) por distrito, reutilizado
-    const padronDistrito = useMemo(() => Object.values(padronGlobal || {}).filter(p => p.distrito === distritoFiltroMaster), [padronGlobal, distritoFiltroMaster]);
-    const padronPorMesa = useMemo(() => { const counts = {}; padronDistrito.forEach(p => { counts[p.mesa] = (counts[p.mesa] || 0) + 1; }); return counts; }, [padronDistrito]);
     const [totalPadronDistrito, setTotalPadronDistrito] = useState(0);
     const [localMesaData, setLocalMesaData] = useState({ locales: [], totalDistrito: 0 });
     useEffect(() => {
@@ -161,14 +158,19 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         alert(`✅ ${encargadoForm.nombre} asignado a Mesa ${mesaSel.mesa} de ${mesaSel.local}.`);
         setEncargadoForm({ ci: "", nombre: "", telefono: "" });
     };
-    const mesasDelDistrito = Object.keys(padronPorMesa).sort((a,b)=>parseInt(a)-parseInt(b));
+    // Lista de mesas del distrito por LOCAL+MESA (fuente: Supabase). El N de mesa se repite entre locales,
+    // por eso cada item lleva su cod_local para armar la llave única (igual que el veedor).
+    const mesasEscrutinio = localMesaData.locales.flatMap(loc =>
+        loc.mesas.map(m => ({ cod_local: loc.cod_local, local: loc.local, mesa: m.mesa, cantidad: m.cantidad }))
+    );
 
     
 
     const padronLlaves = useMemo(() => { const map = {}; Object.entries(padronGlobal || {}).forEach(([ci, p]) => { map[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)] = { ci, ...p }; }); return map; }, [padronGlobal]);
 
-    const [mesaEscrutinioSelect, setMesaEscrutinioSelect] = useState("");
+    const [escSel, setEscSel] = useState(null); // { cod_local, mesa, local }
     const [formEscrutinioAdmin, setFormEscrutinioAdmin] = useState({ intendente: "", concejales: {} });
+    const llaveEscSel = escSel ? generarLlaveMesa(distritoFiltroMaster, escSel.cod_local, escSel.mesa) : null;
 
     const [fDetCoord, setFDetCoord] = useState("TODOS");
     const [fDetVoto, setFDetVoto] = useState("TODOS");
@@ -262,8 +264,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     
     const eliminarVoto = (id) => { if(window.confirm("⚠️ ¿Eliminar registro?")) remove(ref(db, `votos_seguros/${id}`)); };
 
-    const seleccionarMesaEscrutinio = (m) => { setMesaEscrutinioSelect(String(m)); const dataGuardada = (escrutinioGlobal || {})[generarLlaveMesa(distritoFiltroMaster, m)]; if (dataGuardada) { setFormEscrutinioAdmin(dataGuardada); } else { const initConc = {}; configApp.concejales.forEach(c => initConc[c] = ""); setFormEscrutinioAdmin({ intendente: "", concejales: initConc, rivalesIntendente: [], rivalesConcejales: [], blancos: "", nulos: "" }); } };
-    const guardarEscrutinioAdmin = () => { if(!mesaEscrutinioSelect) return; set(ref(db, `dia_d/escrutinio/${generarLlaveMesa(distritoFiltroMaster, mesaEscrutinioSelect)}`), { ...formEscrutinioAdmin, timestamp: Date.now() }); alert("✅ Acta actualizada."); };
+    const seleccionarMesaEscrutinio = (loc) => { setEscSel(loc); const dataGuardada = (escrutinioGlobal || {})[generarLlaveMesa(distritoFiltroMaster, loc.cod_local, loc.mesa)]; if (dataGuardada) { setFormEscrutinioAdmin(dataGuardada); } else { const initConc = {}; configApp.concejales.forEach(c => initConc[c] = ""); setFormEscrutinioAdmin({ intendente: "", concejales: initConc, rivalesIntendente: [], rivalesConcejales: [], blancos: "", nulos: "" }); } };
+    const guardarEscrutinioAdmin = () => { if(!escSel) return; set(ref(db, `dia_d/escrutinio/${llaveEscSel}`), { ...formEscrutinioAdmin, timestamp: Date.now() }); alert("✅ Acta actualizada."); };
 
     const exportarExcel = () => {
         let csvContent = "CÉDULA;NOMBRES;APELLIDOS;TELÉFONO;DISTRITO;LOCAL;MESA;ORDEN;CONCEJAL;COORDINADOR;COLOR;VOTÓ (DÍA D);PASÓ PC\n";
@@ -1158,20 +1160,23 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                     <h3 className="font-black text-slate-800 mb-2">SELECCIONAR MESA</h3>
                                 </div>
                                 <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                                    {mesasDelDistrito.map(m => {
-                                        const completado = (escrutinioGlobal||{})[generarLlaveMesa(distritoFiltroMaster, m)];
+                                    {mesasEscrutinio.map(loc => {
+                                        const llave = generarLlaveMesa(distritoFiltroMaster, loc.cod_local, loc.mesa);
+                                        const completado = (escrutinioGlobal||{})[llave];
+                                        const sel = llaveEscSel === llave;
                                         return (
-                                            <button key={m} onClick={()=>seleccionarMesaEscrutinio(m)} className={`w-full text-left p-3 rounded-xl font-black text-sm flex justify-between items-center transition-colors ${mesaEscrutinioSelect === String(m) ? 'bg-red-600 text-white' : completado ? 'bg-green-50 text-green-800 border border-green-200' : 'hover:bg-slate-100 text-slate-700'}`}>
-                                                MESA {m}
-                                                {completado && <CheckCircle size={14} className={mesaEscrutinioSelect === String(m) ? "text-white" : "text-green-500"}/>}
+                                            <button key={llave} onClick={()=>seleccionarMesaEscrutinio(loc)} className={`w-full text-left p-3 rounded-xl font-black text-xs flex justify-between items-center gap-2 transition-colors ${sel ? 'bg-red-600 text-white' : completado ? 'bg-green-50 text-green-800 border border-green-200' : 'hover:bg-slate-100 text-slate-700'}`}>
+                                                <span className="flex flex-col leading-tight min-w-0"><span>MESA {loc.mesa}</span><span className={`text-[9px] font-bold truncate ${sel ? 'text-red-100' : 'text-slate-400'}`}>{loc.local}</span></span>
+                                                {completado && <CheckCircle size={14} className={sel ? "text-white" : "text-green-500"}/>}
                                             </button>
                                         )
                                     })}
+                                    {mesasEscrutinio.length === 0 && <div className="text-center text-gray-400 font-bold p-4 text-xs">Cargando mesas… (necesita datos del distrito en Supabase)</div>}
                                 </div>
                             </div>
 
                             <div className="w-full lg:w-3/4 print:w-full">
-                                {!mesaEscrutinioSelect ? (
+                                {!escSel ? (
                                     <div className="bg-white rounded-2xl shadow border h-full flex flex-col items-center justify-center p-10 text-center text-slate-400 print:hidden">
                                         <Calculator size={64} className="mb-4 opacity-50"/>
                                         <h3 className="text-2xl font-black">SELECCIONA UNA MESA</h3>
@@ -1180,8 +1185,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                 ) : (
                                     <div className="bg-white rounded-2xl shadow border p-6 lg:p-8 animate-fade-in relative print:border-none print:shadow-none print:p-0">
                                         <div className="flex justify-between items-end border-b-4 border-slate-900 pb-4 mb-6">
-                                            <div><h3 className="text-3xl font-black">ACTA MESA {mesaEscrutinioSelect}</h3><p className="font-bold text-gray-500 uppercase">{distritoFiltroMaster}</p></div>
-                                            {(escrutinioGlobal||{})[generarLlaveMesa(distritoFiltroMaster, mesaEscrutinioSelect)] ? (
+                                            <div><h3 className="text-3xl font-black">ACTA MESA {escSel.mesa}</h3><p className="font-bold text-gray-500 uppercase">{escSel.local} · {distritoFiltroMaster}</p></div>
+                                            {(escrutinioGlobal||{})[llaveEscSel] ? (
                                                 <span className="bg-green-100 text-green-800 font-black px-4 py-2 rounded-xl border border-green-300 print:hidden">✅ ACTA GUARDADA</span>
                                             ) : (
                                                 <span className="bg-yellow-100 text-yellow-800 font-black px-4 py-2 rounded-xl border border-yellow-300 print:hidden">⏳ ESPERANDO CARGA</span>
@@ -1203,7 +1208,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                             <div className="space-y-4 mb-6">
                                                 {configApp.concejales.filter(c=>c!=="SIN ASIGNAR").map(c => {
                                                     // USO DE LA FUNCIÓN INTELIGENTE TAMBIÉN AQUÍ
-                                                    const segurosEsperados = votosFiltrados.filter(v => concejalCoincide(v.concejal, c) && String(v.mesa) === String(mesaEscrutinioSelect)).length;
+                                                    const segurosEsperados = votosFiltrados.filter(v => concejalCoincide(v.concejal, c) && String(v.mesa) === String(escSel.mesa) && (v.cod_local == null || String(v.cod_local) === String(escSel.cod_local))).length;
                                                     const reales = parseInt(formEscrutinioAdmin.concejales?.[c]) || 0;
                                                     const dif = reales - segurosEsperados;
                                                     const proj = segurosEsperados > 0 ? Math.round((reales / segurosEsperados) * 100) : (reales > 0 ? 100 : 0);
