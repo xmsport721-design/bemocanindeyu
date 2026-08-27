@@ -1,0 +1,11 @@
+# BEMO Sistema Electoral 2026
+
+Sistema privado de control electoral para el Departamento de Concepción (Paraguay), elecciones 2026.
+
+## Acceso
+
+- [Ingresar al sistema](https://control.bemo.workers.dev/) — requiere credenciales autorizadas (correo @bemo.com).
+
+## Sobre el sistema
+
+Aplicación privada de gestión electoral para uso interno: veedores de mesa, concejales, coordinadores y administración departamental. No contiene información pública ni indexable.

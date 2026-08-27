@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
-import './index.css';
+import './index.generated.css';
 import { ref, onValue, get, set, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { ShieldAlert } from "lucide-react";

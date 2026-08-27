@@ -29,3 +29,6 @@ serviceAccountKey.json
 padron_import.json
 *.CSV
 *.csv
+
+# CSS compilado de Tailwind (se regenera con prebuild)
+src/index.generated.css
