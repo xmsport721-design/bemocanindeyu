@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { ref, set } from "firebase/database";
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Settings, Save, Camera, RefreshCw, Edit2, Trash2 } from "lucide-react";
-import { storage } from "../firebase";
 import { normalizarNombre } from "../lib/helpers";
 import { DISTRITOS_CONCEPCION } from "../constants";
+
+const storage = getStorage(); // usa la app default (ya inicializada en firebase.js)
 
 export default function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, db, distritoGlobal, setDistritoGlobal }) {
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";

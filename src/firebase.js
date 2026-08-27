@@ -4,7 +4,7 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
-import { getStorage } from "firebase/storage";
+// storage NO se importa acá: solo lo usa el panel de config (chunk lazy) → menos JS en el arranque
 
 export const firebaseConfig = {
   apiKey: "AIzaSyC03JZte5apho_4LEk2-pp1HJ7avuyJ5bM",
@@ -20,6 +20,5 @@ const app = initializeApp(firebaseConfig);
 
 export const db = getDatabase(app);
 export const auth = getAuth(app);
-export const storage = getStorage(app);
 
 export default app;
