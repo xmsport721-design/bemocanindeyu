@@ -13,6 +13,15 @@ export async function buscarPadronPorCedula(cedula) {
   return (data || []).find(r => String(r.cedula) === ci) || null;
 }
 
+// Cruzamiento masivo: dado un array de cédulas, devuelve las que figuran en el padrón (1 viaje).
+export async function buscarPadronPorCedulasLote(cedulas, distrito) {
+  const lista = Array.from(new Set((cedulas || []).map(c => String(c).trim()).filter(Boolean)));
+  if (lista.length === 0) return [];
+  const { data, error } = await supabase.rpc("buscar_padron_cedulas", { cedulas: lista, dist: distrito || null });
+  if (error) { console.error("Supabase cruzamiento cédulas:", error.message); return []; }
+  return data || [];
+}
+
 // Electores por LOCAL (institución) y MESA de un distrito (agregado server-side vía RPC).
 // Devuelve { locales: [{cod_local, local, total, mesas:[{mesa, cantidad}]}], totalDistrito }
 export async function padronPorLocalMesa(distrito) {

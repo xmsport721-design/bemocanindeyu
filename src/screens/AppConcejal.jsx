@@ -1,15 +1,16 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { ref, set, remove } from "firebase/database";
+import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2 } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
-import { buscarPadronPorCedula, buscarPadronPorNombre } from "../lib/padronSupabase";
+import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLote } from "../lib/padronSupabase";
 
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
-    const [tab, setTab] = useState("registro");
+    const [tab, setTab] = useState("dashboard");
     const [menuAbierto, setMenuAbierto] = useState(false);
+    const META_URNAS = 1200; // meta de votos del concejal (estado de urnas)
 
     const [bNom, setBNom] = useState("");
     const [resNom, setResNom] = useState([]);
@@ -48,6 +49,55 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [fC, setFC] = useState("TODOS");
     const [fS, setFS] = useState("TODOS");
     const [mNC, setMNC] = useState(false);
+
+    // Carga masiva por coordinador (pegar/CSV de cédulas + cruzamiento con padrón)
+    const [masivoTexto, setMasivoTexto] = useState("");
+    const [masivoCoord, setMasivoCoord] = useState("");
+    const [masivoCargando, setMasivoCargando] = useState(false);
+    const [masivoResult, setMasivoResult] = useState(null); // { encontrados:[], noEncontrados:[], telMap:{} }
+    const [masivoGuardando, setMasivoGuardando] = useState(false);
+
+    // Coordinador fijado (carga rápida de su lista) + datos del nuevo coordinador
+    const [coordFijo, setCoordFijo] = useState("");
+    const [nuevoCoordTel, setNuevoCoordTel] = useState("");
+    const [nuevoCoordZona, setNuevoCoordZona] = useState("URBANA");
+    const [coordMeta, setCoordMeta] = useState({}); // { normalizado: {nombre, telefono, zona} }
+
+    useEffect(() => {
+        const un = onValue(ref(db, `coordinadores/${perfil.distrito}`), snap => setCoordMeta(snap.val() || {}));
+        return () => un();
+    }, [db, perfil.distrito]);
+
+    // Estado de urnas (meta del concejal): cuántos de sus cargados ya votaron
+    const urnas = useMemo(() => {
+        const votaron = misV.filter(v => yaVotaronGlobal[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
+        const falta = Math.max(0, META_URNAS - votaron);
+        const pct = META_URNAS > 0 ? Math.min(100, Math.round((votaron / META_URNAS) * 100)) : 0;
+        return { votaron, falta, pct, cargados: misV.length };
+    }, [misV, yaVotaronGlobal]);
+
+    // Ranking de coordinadores: total de cargas, cuántos votaron y en qué locales votan
+    const rankingCoord = useMemo(() => {
+        const m = {};
+        misV.forEach(v => {
+            const c = v.coordinador || "SIN COORDINADOR";
+            if (!m[c]) m[c] = { coordinador: c, total: 0, votaron: 0, locales: {} };
+            m[c].total++;
+            if (yaVotaronGlobal[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]) m[c].votaron++;
+            const loc = v.local || "SIN LOCAL";
+            m[c].locales[loc] = (m[c].locales[loc] || 0) + 1;
+        });
+        return Object.values(m)
+            .map(c => ({ ...c, localesTop: Object.entries(c.locales).map(([local, n]) => ({ local, n })).sort((a, b) => b.n - a.n) }))
+            .sort((a, b) => b.total - a.total);
+    }, [misV, yaVotaronGlobal]);
+
+    // Cuántas cargas hay por local de votación
+    const porLocal = useMemo(() => {
+        const m = {};
+        misV.forEach(v => { const loc = v.local || "SIN LOCAL"; m[loc] = (m[loc] || 0) + 1; });
+        return Object.entries(m).map(([local, total]) => ({ local, total })).sort((a, b) => b.total - a.total);
+    }, [misV]);
 
     // Reenvía check-ins de paso PC que quedaron pendientes (app cerrada antes de confirmar)
     useEffect(() => {
@@ -126,15 +176,71 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         if (window.confirm("¿Quitar este dirigente?")) remove(ref(db, `dia_d/asignaciones_dirigentes/${ci}`));
     };
 
+    // Parsea el texto pegado (o CSV): por línea, 1er número = cédula, 2do (si hay) = teléfono
+    const parsearMasivo = () => {
+        const telMap = {}; const cedulas = [];
+        masivoTexto.split(/\r?\n/).forEach(linea => {
+            const nums = (linea.match(/\d+/g) || []);
+            if (nums.length === 0) return;
+            const ci = nums[0]; cedulas.push(ci);
+            if (nums[1] && nums[1].length >= 6) telMap[ci] = nums[1];
+        });
+        return { cedulas: Array.from(new Set(cedulas)), telMap };
+    };
+
+    const cruzarMasivo = async () => {
+        const { cedulas, telMap } = parsearMasivo();
+        if (cedulas.length === 0) return alert("Pegá al menos una cédula (una por línea).");
+        setMasivoCargando(true);
+        const filas = await buscarPadronPorCedulasLote(cedulas, perfil.distrito);
+        const encMap = {}; filas.forEach(f => { encMap[String(f.cedula)] = f; });
+        const encontrados = cedulas.filter(ci => encMap[ci]).map(ci => encMap[ci]);
+        const noEncontrados = cedulas.filter(ci => !encMap[ci]);
+        setMasivoResult({ encontrados, noEncontrados, telMap });
+        setMasivoCargando(false);
+    };
+
+    const cargarMasivo = () => {
+        if (!masivoResult || masivoResult.encontrados.length === 0) return;
+        const coord = coordFijo || masivoCoord.trim().toUpperCase();
+        if (!coord) return alert("Indicá el coordinador de esta lista.");
+        setMasivoGuardando(true);
+        const yaMios = new Set(misV.map(v => String(v.cedula)));
+        const updates = {}; let cargados = 0, saltados = 0;
+        masivoResult.encontrados.forEach(p => {
+            if (yaMios.has(String(p.cedula))) { saltados++; return; }
+            const key = push(ref(db, 'votos_seguros')).key;
+            updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: masivoResult.telMap[String(p.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: miNom, coordinador: coord, semaforo: "VERDE", registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), origen: "carga_masiva" };
+            cargados++;
+        });
+        if (cargados === 0) { setMasivoGuardando(false); return alert("Todos ya estaban cargados."); }
+        update(ref(db, 'votos_seguros'), updates)
+            .then(() => { setMasivoResult(null); setMasivoTexto(""); alert(`✅ Cargados ${cargados}. Ya estaban: ${saltados}.`); })
+            .catch(() => alert("No se pudo guardar, reintentá."))
+            .finally(() => setMasivoGuardando(false));
+    };
+
+    const leerArchivoMasivo = (e) => {
+        const f = e.target.files?.[0]; if (!f) return;
+        const r = new FileReader();
+        r.onload = () => setMasivoTexto(String(r.result || ""));
+        r.readAsText(f);
+    };
+
     const handleRegistrarConcejal = () => {
         import('firebase/database').then(({ push, ref }) => {
             if(!form.cedula||!form.nombre)return alert("Datos incompletos");
             if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado por ti.");
-            const d={...form, concejal: miNom, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()};
+            const coordFinal = coordFijo || form.coordinador; // carga rápida: usa el coordinador fijado
+            const d={...form, coordinador: coordFinal, concejal: miNom, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()};
             push(ref(db,'votos_seguros'), d);
-            alert("Guardado correctamente");
-            setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:""}));
-            setMNC(false);
+            // Si es un coordinador nuevo con datos, guarda su ficha (teléfono + zona)
+            if (mNC && coordFinal && (nuevoCoordTel || nuevoCoordZona)) {
+                set(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(coordFinal)}`), { nombre: coordFinal, telefono: nuevoCoordTel, zona: nuevoCoordZona, concejal: miNom, ts: Date.now() }).catch(()=>{});
+            }
+            // Limpia el elector; si hay coordinador fijo, lo mantiene para seguir cargando su lista
+            setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijo || ""}));
+            setMNC(false); setNuevoCoordTel("");
         });
     };
 
@@ -159,6 +265,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
             <div className="bg-white flex border-b shadow-sm sticky top-[68px] z-50 print:hidden px-2 items-center justify-center w-full">
                 <div className="flex items-center max-w-full pt-2 pb-2">
                     <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
+                        <button onClick={() => {setTab("dashboard"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'dashboard' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><LayoutDashboard size={16}/> PANEL</button>
                         <button onClick={() => {setTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><CheckCircle size={16}/> REGISTRO</button>
                         <button onClick={() => {setTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={16}/> LISTA</button>
                         <button onClick={() => {setTab("dia_d_buscador"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'dia_d_buscador' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Search size={16}/> DÍA D BUSCADOR</button>
@@ -180,6 +287,69 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
             </div>
 
             <main className="max-w-5xl mx-auto p-4 md:p-6">
+                {tab === "dashboard" && (
+                    <div className="space-y-5 animate-fade-in">
+                        {/* ESTADO DE URNAS (META) */}
+                        <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
+                            <div className="flex items-center gap-2 mb-4"><Target size={20} className="text-red-500"/><h2 className="font-black text-lg uppercase">Estado de urnas · Meta {META_URNAS.toLocaleString()}</h2></div>
+                            <div className="grid grid-cols-3 gap-3 mb-4">
+                                <div className="bg-white/5 rounded-2xl p-4 text-center"><div className="text-4xl font-black text-green-400 leading-none">{urnas.votaron}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">Ya votaron</div></div>
+                                <div className="bg-white/5 rounded-2xl p-4 text-center"><div className="text-4xl font-black text-amber-400 leading-none">{urnas.falta}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">Falta p/ meta</div></div>
+                                <div className="bg-white/5 rounded-2xl p-4 text-center"><div className="text-4xl font-black leading-none">{urnas.cargados}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">Cargados</div></div>
+                            </div>
+                            <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden"><div className="bg-green-500 h-4 rounded-full transition-all duration-500" style={{width: `${urnas.pct}%`}}></div></div>
+                            <div className="text-right text-xs font-black text-green-400 mt-1">{urnas.pct}% de la meta</div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            {/* RANKING DE COORDINADORES */}
+                            <div className="bg-white p-5 rounded-3xl shadow border">
+                                <div className="flex items-center gap-2 mb-4"><Trophy size={20} className="text-amber-500"/><h2 className="font-black text-lg text-slate-800 uppercase">Top 10 Coordinadores</h2></div>
+                                <div className="space-y-2">
+                                    {rankingCoord.slice(0,10).map((c, i) => {
+                                        const meta = coordMeta[normalizarNombre(c.coordinador)] || {};
+                                        return (
+                                        <div key={c.coordinador} className="bg-slate-50 border rounded-2xl p-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${i===0?'bg-amber-400 text-white':i===1?'bg-slate-300 text-slate-700':i===2?'bg-orange-300 text-white':'bg-slate-200 text-slate-600'}`}>{i+1}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-black text-sm uppercase truncate">{c.coordinador}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 flex gap-2 items-center flex-wrap">{meta.zona && <span className={`px-1.5 rounded ${meta.zona==='RURAL'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700'}`}>{meta.zona==='RURAL'?'🌾 RURAL':'🏙️ URBANA'}</span>}{meta.telefono && <span>📞 {meta.telefono}</span>}<span className="text-green-600">✅ {c.votaron} votaron</span></div>
+                                                </div>
+                                                <div className="text-right shrink-0"><div className="text-2xl font-black text-red-700 leading-none">{c.total}</div><div className="text-[8px] font-black uppercase text-slate-400">cargas</div></div>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 mt-2 pl-11">
+                                                {c.localesTop.slice(0,4).map(l => (
+                                                    <span key={l.local} className="text-[9px] font-bold bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-600 flex items-center gap-1"><MapPin size={9} className="text-red-400"/>{l.local.length>22?l.local.slice(0,22)+'…':l.local} <b className="text-slate-900">{l.n}</b></span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        );
+                                    })}
+                                    {rankingCoord.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Todavía no hay cargas.</div>}
+                                </div>
+                            </div>
+
+                            {/* LOCALES DE VOTACIÓN */}
+                            <div className="bg-white p-5 rounded-3xl shadow border">
+                                <div className="flex items-center gap-2 mb-4"><MapPin size={20} className="text-red-500"/><h2 className="font-black text-lg text-slate-800 uppercase">Cargas por local ({porLocal.length})</h2></div>
+                                <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                                    {porLocal.map(l => {
+                                        const max = porLocal[0]?.total || 1;
+                                        return (
+                                        <div key={l.local} className="border rounded-xl p-3">
+                                            <div className="flex justify-between items-center gap-2 mb-1"><span className="font-black text-xs uppercase text-slate-700 truncate">{l.local}</span><span className="font-black text-red-700 shrink-0">{l.total}</span></div>
+                                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div className="bg-red-500 h-2 rounded-full" style={{width: `${Math.round((l.total/max)*100)}%`}}></div></div>
+                                        </div>
+                                        );
+                                    })}
+                                    {porLocal.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Sin datos.</div>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {tab === "registro" && (
                     <div className="bg-white p-6 rounded-2xl shadow-sm border max-w-4xl mx-auto animate-fade-in">
                         <h2 className="font-black text-xl mb-6 text-slate-800 flex items-center gap-2"><UserSquare2/> REGISTRO DE VOTOS ({perfil.distrito})</h2>
@@ -210,22 +380,79 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">CONCEJAL</label><input type="text" readOnly className="p-4 border-2 rounded-xl font-bold bg-gray-50 text-gray-500" value={miNom.includes(' - ') ? miNom.split(' - ')[1] : miNom} /></div>
                             <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COORDINADOR</label>
-                                <div className="flex gap-2">
-                                    {!mNC ? (
-                                        <><select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{mCoor.map(c => <option key={c} value={c}>{c}</option>)}</select><button onClick={()=>{setMNC(true); setForm({...form, coordinador:""})}} className="bg-slate-200 px-4 rounded-xl font-black text-xl">+</button></>
-                                    ) : (
-                                        <><input type="text" className="flex-1 p-4 border-2 rounded-xl font-bold uppercase outline-none" placeholder="NUEVO..." value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value.toUpperCase()})}/><button onClick={()=>{setMNC(false); setForm({...form, coordinador:""})}} className="bg-red-100 text-red-700 px-4 rounded-xl font-black text-xl">×</button></>
-                                    )}
-                                </div>
+                                {coordFijo ? (
+                                    <div className="flex gap-2 items-stretch">
+                                        <div className="flex-1 p-4 border-2 border-emerald-400 bg-emerald-50 rounded-xl font-black text-emerald-800 flex items-center gap-2 truncate"><Pin size={16}/> {coordFijo}</div>
+                                        <button onClick={()=>{setCoordFijo(""); setForm(f=>({...f, coordinador:""}));}} className="bg-red-100 text-red-700 px-4 rounded-xl font-black text-xl" title="Soltar coordinador fijo">×</button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        {!mNC ? (
+                                            <><select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{mCoor.map(c => <option key={c} value={c}>{c}</option>)}</select><button onClick={()=>{setMNC(true); setForm({...form, coordinador:""})}} className="bg-slate-200 px-4 rounded-xl font-black text-xl" title="Nuevo coordinador">+</button>{form.coordinador && <button onClick={()=>setCoordFijo(form.coordinador)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-xl font-black transition-colors" title="Fijar para cargar su lista rápido"><Pin size={16}/></button>}</>
+                                        ) : (
+                                            <><input type="text" className="flex-1 p-4 border-2 rounded-xl font-bold uppercase outline-none" placeholder="NUEVO..." value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value.toUpperCase()})}/><button onClick={()=>{setMNC(false); setForm({...form, coordinador:""})}} className="bg-red-100 text-red-700 px-4 rounded-xl font-black text-xl">×</button></>
+                                        )}
+                                    </div>
+                                )}
+                                {mNC && (
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <input type="text" placeholder="TEL. COORDINADOR" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none text-sm" value={nuevoCoordTel} onChange={e=>setNuevoCoordTel(e.target.value)} />
+                                        <select className="p-3 border-2 rounded-lg font-bold outline-none text-sm" value={nuevoCoordZona} onChange={e=>setNuevoCoordZona(e.target.value)}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COLOR</label><select className={`w-full p-4 rounded-xl font-black text-white outline-none ${form.semaforo==='VERDE'?'bg-green-500':form.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={form.semaforo} onChange={e=>setForm({...form, semaforo: e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div>
                         </div>
                         <button onClick={handleRegistrarConcejal} className="w-full mt-6 bg-[#2ecc71] hover:bg-green-600 text-white py-4 rounded-xl font-black shadow-lg transition-colors">GUARDAR REGISTRO</button>
+
+                        <div className="mt-8 border-t-2 border-dashed pt-6">
+                            <h3 className="font-black text-lg text-slate-800 flex items-center gap-2 mb-1"><Upload className="text-emerald-600" size={20}/> CARGA MASIVA POR COORDINADOR</h3>
+                            <p className="text-xs text-slate-500 font-bold mb-4">Pegá las cédulas de tu Excel (una por línea; opcional "cédula, teléfono"). Cruzamos con el padrón y cargamos solo las que figuran.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                {coordFijo ? (
+                                    <div className="p-3 border-2 border-emerald-400 bg-emerald-50 rounded-xl font-black text-emerald-800 flex items-center gap-2"><Pin size={16}/> {coordFijo}</div>
+                                ) : (
+                                    <input type="text" placeholder="COORDINADOR DE ESTA LISTA" className="p-3 border-2 rounded-xl font-bold uppercase outline-none focus:border-emerald-500" value={masivoCoord} onChange={e=>setMasivoCoord(e.target.value.toUpperCase())} list="coordListMasivo" />
+                                )}
+                                <label className="p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-500 text-center cursor-pointer hover:bg-slate-50 flex items-center justify-center gap-2"><Upload size={16}/> Subir CSV/TXT<input type="file" accept=".csv,.txt" className="hidden" onChange={leerArchivoMasivo}/></label>
+                            </div>
+                            <datalist id="coordListMasivo">{mCoor.map(c=><option key={c} value={c}/>)}</datalist>
+                            <textarea rows={5} placeholder={"7684189\n1234567, 0981123456"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none focus:border-emerald-500 mb-3" value={masivoTexto} onChange={e=>setMasivoTexto(e.target.value)} />
+                            <button onClick={cruzarMasivo} disabled={masivoCargando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50">{masivoCargando ? "CRUZANDO CON PADRÓN..." : "CRUZAR CON PADRÓN"}</button>
+
+                            {masivoResult && (
+                                <div className="mt-4 bg-slate-50 border rounded-2xl p-4">
+                                    <div className="flex gap-3 mb-3 flex-wrap">
+                                        <span className="bg-green-100 text-green-800 font-black px-3 py-1 rounded-full text-sm">✅ {masivoResult.encontrados.length} encontrados</span>
+                                        {masivoResult.noEncontrados.length>0 && <span className="bg-red-100 text-red-700 font-black px-3 py-1 rounded-full text-sm">❌ {masivoResult.noEncontrados.length} no figuran</span>}
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto text-xs space-y-1 mb-3">
+                                        {masivoResult.encontrados.slice(0,50).map(p=>(<div key={p.cedula} className="flex justify-between bg-white border rounded px-2 py-1"><span className="font-bold truncate">{p.nombre} {p.apellido}</span><span className="text-slate-400 shrink-0 ml-2">CI {p.cedula} · M{p.mesa}</span></div>))}
+                                    </div>
+                                    {masivoResult.noEncontrados.length>0 && <div className="text-[11px] text-red-600 font-bold mb-3 break-words">No figuran: {masivoResult.noEncontrados.slice(0,30).join(", ")}{masivoResult.noEncontrados.length>30?"…":""}</div>}
+                                    <button onClick={cargarMasivo} disabled={masivoGuardando || masivoResult.encontrados.length===0} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50">{masivoGuardando ? "CARGANDO..." : `CARGAR ${masivoResult.encontrados.length} A ${coordFijo || masivoCoord || 'COORDINADOR'}`}</button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
                 {tab === "lista" && (
                     <div className="bg-white p-4 rounded-2xl shadow border overflow-x-auto animate-fade-in">
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4">
+                            <div className="flex items-center gap-2 mb-2"><Trophy size={16} className="text-amber-500"/><h3 className="font-black text-xs uppercase text-amber-800">Ranking de coordinadores (más cargas)</h3></div>
+                            <div className="space-y-1 max-h-52 overflow-y-auto">
+                                {rankingCoord.slice(0,10).map((c,i)=>(
+                                    <button key={c.coordinador} onClick={()=>{setFC(c.coordinador);setLim(50);}} className="w-full flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border hover:bg-amber-100 transition-colors text-left">
+                                        <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${i===0?'bg-amber-400 text-white':i===1?'bg-slate-300 text-slate-700':i===2?'bg-orange-300 text-white':'bg-slate-200 text-slate-600'}`}>{i+1}</span>
+                                        <span className="flex-1 font-black text-xs uppercase truncate">{c.coordinador}</span>
+                                        <span className="text-[10px] font-bold text-green-600 shrink-0">✅ {c.votaron}</span>
+                                        <span className="text-sm font-black text-red-700 shrink-0">{c.total}</span>
+                                    </button>
+                                ))}
+                                {rankingCoord.length===0 && <div className="text-center text-gray-400 font-bold text-xs p-2">Sin cargas aún.</div>}
+                            </div>
+                        </div>
                         <div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
                         <table className="w-full text-left min-w-[600px]"><thead className="bg-red-50 text-red-900 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Día D</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y text-sm">
                             {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{
