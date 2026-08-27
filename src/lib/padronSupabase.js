@@ -3,17 +3,14 @@
 // ============================================================================
 import { supabase } from "../supabase";
 
-// "¿Dónde vota fulano?" — 1 registro por cédula (indexado por PK)
+// "¿Dónde vota fulano?" — 1 registro por cédula.
+// Vía RPC (SECURITY DEFINER) para NO depender del claim RLS del usuario.
 export async function buscarPadronPorCedula(cedula) {
   const ci = String(cedula || "").trim();
   if (!ci) return null;
-  const { data, error } = await supabase
-    .from("padron")
-    .select("cedula,nombre,apellido,distrito,cod_local,local,mesa,orden,direccion")
-    .eq("cedula", ci)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("buscar_padron", { q: ci, dist: null });
   if (error) { console.error("Supabase padrón (cédula):", error.message); return null; }
-  return data;
+  return (data || []).find(r => String(r.cedula) === ci) || null;
 }
 
 // Electores por LOCAL (institución) y MESA de un distrito (agregado server-side vía RPC).
@@ -59,18 +56,12 @@ export async function contarPadronDistrito(distrito) {
   return count || 0;
 }
 
-// Búsqueda por nombre/apellido (opcional: acotar por distrito). Máx 20.
+// Búsqueda por nombre y/o apellido (en cualquier orden), opcional por distrito.
+// Vía RPC: saltea RLS, matchea todas las palabras y usa índice trigram (rápido).
 export async function buscarPadronPorNombre(texto, distrito) {
   const t = String(texto || "").trim();
   if (t.length < 3) return [];
-  const patron = `%${t}%`;
-  let q = supabase
-    .from("padron")
-    .select("cedula,nombre,apellido,distrito,cod_local,local,mesa,orden")
-    .or(`nombre.ilike.${patron},apellido.ilike.${patron}`)
-    .limit(20);
-  if (distrito) q = q.eq("distrito", distrito);
-  const { data, error } = await q;
+  const { data, error } = await supabase.rpc("buscar_padron", { q: t, dist: distrito || null });
   if (error) { console.error("Supabase padrón (nombre):", error.message); return []; }
   return data || [];
 }
