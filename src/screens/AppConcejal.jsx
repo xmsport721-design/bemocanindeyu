@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove } from "firebase/database";
 import { signOut } from "firebase/auth";
 import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer } from "lucide-react";
@@ -40,9 +40,32 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [fS, setFS] = useState("TODOS");
     const [mNC, setMNC] = useState(false);
 
+    // Reenvía check-ins de paso PC que quedaron pendientes (app cerrada antes de confirmar)
+    useEffect(() => {
+        try {
+            Object.keys(localStorage).filter(k => k.startsWith('pcpend_')).forEach(k => {
+                const llave = k.slice(7);
+                set(ref(db, `dia_d/paso_pc_checkins/${llave}`), JSON.parse(localStorage.getItem(k)))
+                    .then(() => { try { localStorage.removeItem(k); } catch {} }).catch(() => {});
+            });
+        } catch {}
+    }, [db]);
+
+    // Robusto: marca instantánea (no se traba/desmarca) + respaldo local + envío en 2do plano.
     const marcarPasoPCConcejal = (llave, pcData) => {
-        if (pcData) { remove(ref(db, `dia_d/paso_pc_checkins/${llave}`)); setResDiaD({...resDiaD, pc: null}); }
-        else { const nombreConcejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom; const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}` }; set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData); setResDiaD({...resDiaD, pc: newData}); }
+        if (pcData) {
+            setResDiaD(r => ({ ...r, pc: null }));
+            try { localStorage.removeItem(`pcpend_${llave}`); } catch {}
+            remove(ref(db, `dia_d/paso_pc_checkins/${llave}`)).catch(() => {});
+        } else {
+            const nombreConcejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom;
+            const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}` };
+            setResDiaD(r => ({ ...r, pc: newData }));                               // 1) instantáneo
+            try { localStorage.setItem(`pcpend_${llave}`, JSON.stringify(newData)); } catch {} // respaldo
+            set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData)               // 2) 2do plano
+                .then(() => { try { localStorage.removeItem(`pcpend_${llave}`); } catch {} })
+                .catch(() => {});
+        }
     };
 
     const buscarPorNombreConcejal = async () => {

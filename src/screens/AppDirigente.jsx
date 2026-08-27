@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ref, set, remove } from "firebase/database";
 import { signOut } from "firebase/auth";
 import { LogOut, Search } from "lucide-react";
@@ -20,9 +20,32 @@ export default function AppDirigente({ yaVotaronGlobal, pasoPCGlobal, configApp,
         setCargando(false);
     };
 
+    // Reenvía check-ins de paso PC que quedaron pendientes (app cerrada antes de confirmar)
+    useEffect(() => {
+        try {
+            Object.keys(localStorage).filter(k => k.startsWith('pcpend_')).forEach(k => {
+                const llave = k.slice(7);
+                set(ref(db, `dia_d/paso_pc_checkins/${llave}`), JSON.parse(localStorage.getItem(k)))
+                    .then(() => { try { localStorage.removeItem(k); } catch {} }).catch(() => {});
+            });
+        } catch {}
+    }, [db]);
+
+    // Robusto: marca instantánea (no se traba/desmarca) + respaldo local + envío en 2do plano.
+    // Firebase encola y reintenta solo → aguanta marcación masiva sin perder check-ins.
     const marcarPasoPC = (llave, pcData) => {
-        if (pcData) { remove(ref(db, `dia_d/paso_pc_checkins/${llave}`)); setRes({...res, pc: null}); }
-        else { const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: auth.currentUser?.email || "DIRIGENTE" }; set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData); setRes({...res, pc: newData}); }
+        if (pcData) {
+            setRes(r => ({ ...r, pc: null }));
+            try { localStorage.removeItem(`pcpend_${llave}`); } catch {}
+            remove(ref(db, `dia_d/paso_pc_checkins/${llave}`)).catch(() => {});
+        } else {
+            const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: auth.currentUser?.email || "DIRIGENTE" };
+            setRes(r => ({ ...r, pc: newData }));                                   // 1) instantáneo
+            try { localStorage.setItem(`pcpend_${llave}`, JSON.stringify(newData)); } catch {} // respaldo
+            set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData)               // 2) 2do plano
+                .then(() => { try { localStorage.removeItem(`pcpend_${llave}`); } catch {} })
+                .catch(() => {}); // queda el respaldo; se reenvía al reabrir
+        }
     };
 
     return (
