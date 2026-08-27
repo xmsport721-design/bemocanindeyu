@@ -31,7 +31,7 @@ export default function LoginScreen({ auth, db }) {
         }
     };
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
+        <main className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
             <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border-t-8 border-red-700 relative z-10">
                 <h1 className="text-3xl font-black text-center mb-2 uppercase">BEMO <span className="text-red-700">2026</span></h1>
                 <p className="text-center text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest">DPTO. DE {NOMBRE_DEPARTAMENTO}</p>
@@ -45,6 +45,6 @@ export default function LoginScreen({ auth, db }) {
             <div className="mt-12 text-center relative z-10 animate-fade-in"><p className="text-[10px] font-bold text-slate-500 uppercase mb-4 tracking-widest">Contacta con soporte técnico</p>
                 <div className="border-t border-slate-800 pt-4 px-10"><p className="text-xs font-black tracking-widest text-slate-500">PROPIEDAD DE BEMO SYSTEM S.A © 2026</p></div>
             </div>
-        </div>
+        </main>
     );
 }

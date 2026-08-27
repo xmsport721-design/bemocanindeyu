@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import './index.css';
 import { ref, onValue, get, set, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
 import { signOut, onAuthStateChanged } from "firebase/auth";
@@ -6,10 +6,15 @@ import { ShieldAlert } from "lucide-react";
 import { db, auth } from "./firebase";
 import { DISTRITOS_CONCEPCION } from "./constants";
 import LoginScreen from "./screens/LoginScreen";
-import AppVeedor from "./screens/AppVeedor";
-import AppDirigente from "./screens/AppDirigente";
-import AppConcejal from "./screens/AppConcejal";
-import AppSuperAdmin from "./screens/superadmin/AppSuperAdmin";
+// Code splitting: cada pantalla se descarga solo cuando el rol la necesita (bundle inicial chico)
+const AppVeedor = lazy(() => import("./screens/AppVeedor"));
+const AppDirigente = lazy(() => import("./screens/AppDirigente"));
+const AppConcejal = lazy(() => import("./screens/AppConcejal"));
+const AppSuperAdmin = lazy(() => import("./screens/superadmin/AppSuperAdmin"));
+
+const CargandoPantalla = () => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div></div>
+);
 
 // ==============================================================================================
 // 1. COMPONENTE PRINCIPAL
@@ -97,10 +102,10 @@ export default function BemoSystem() {
   const rol = perfil?.rol;
   
   if (rol === 'pendiente') return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center"><ShieldAlert size={64} className="text-yellow-500 mb-4" /><h1 className="text-2xl font-black mb-2">CUENTA EN REVISIÓN</h1><p className="text-gray-400 mb-8 max-w-sm">Avisa a tu Administrador Local para que active tu acceso.</p><button onClick={()=>signOut(auth)} className="bg-red-600 px-6 py-3 rounded-xl font-bold">CERRAR SESIÓN</button></div>);
-  if (rol === 'veedor') return <AppVeedor padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} />;
-  if (rol === 'concejal') return <AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} />;
-  if (rol === 'dirigente') return <AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} configApp={configApp} auth={auth} db={db} />;
-  if (rol === 'super_admin' || rol === 'master_departamental') return <AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo}  />;
+  if (rol === 'veedor') return <Suspense fallback={<CargandoPantalla/>}><AppVeedor padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} /></Suspense>;
+  if (rol === 'concejal') return <Suspense fallback={<CargandoPantalla/>}><AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} /></Suspense>;
+  if (rol === 'dirigente') return <Suspense fallback={<CargandoPantalla/>}><AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} configApp={configApp} auth={auth} db={db} /></Suspense>;
+  if (rol === 'super_admin' || rol === 'master_departamental') return <Suspense fallback={<CargandoPantalla/>}><AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo} /></Suspense>;
 
   return <div className="min-h-screen flex items-center justify-center"><button onClick={()=>signOut(auth)} className="bg-red-500 text-white p-4 rounded font-bold">ROL NO RECONOCIDO - CERRAR SESIÓN</button></div>;
 }
