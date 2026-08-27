@@ -74,14 +74,14 @@ export default function BemoSystem() {
   }, []);
 
   useEffect(() => {
-      if (usuarioActivo && perfil && perfil.rol && perfil.rol !== 'pendiente') {
-          const myStatusRef = ref(db, `estado_online/${usuarioActivo.uid}`);
-          onValue(ref(db, '.info/connected'), (snap) => {
-              if (snap.val() === true) {
-                  onDisconnect(myStatusRef).remove().then(() => { set(myStatusRef, { rol: perfil.rol, distrito: perfil.distrito, timestamp: Date.now() }); });
-              }
-          });
-      }
+      // No conectar a RTDB hasta estar autenticado (evita WebSocket/errores en la pantalla de login)
+      if (!(usuarioActivo && perfil && perfil.rol && perfil.rol !== 'pendiente')) return;
+      const myStatusRef = ref(db, `estado_online/${usuarioActivo.uid}`);
+      onValue(ref(db, '.info/connected'), (snap) => {
+          if (snap.val() === true) {
+              onDisconnect(myStatusRef).remove().then(() => { set(myStatusRef, { rol: perfil.rol, distrito: perfil.distrito, timestamp: Date.now() }); });
+          }
+      });
       const unsubOnline = onValue(ref(db, 'estado_online'), (snap) => setUsuariosOnline(snap.val() || {}));
       return () => unsubOnline();
   }, [usuarioActivo, perfil]);
