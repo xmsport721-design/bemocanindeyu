@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2 } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
 import { buscarPadronPorCedula, buscarPadronPorNombre } from "../lib/padronSupabase";
 
-export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo }) {
+export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
     const [tab, setTab] = useState("registro");
     const [menuAbierto, setMenuAbierto] = useState(false);
 
@@ -19,6 +19,15 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     const [bDiaD, setBDiaD] = useState("");
     const [resDiaD, setResDiaD] = useState(null);
+
+    // MIS DIRIGENTES (máx 10 por concejal): entran por su cédula a consultar/marcar paso PC
+    const MAX_DIRIGENTES = 10;
+    const [dirForm, setDirForm] = useState({ cedula: "", nombre: "" });
+    const [dirBuscando, setDirBuscando] = useState(false);
+    const misDirigentes = useMemo(
+        () => Object.values(asignacionesDirigentes || {}).filter(d => d.concejalUid === usuarioActivo.uid),
+        [asignacionesDirigentes, usuarioActivo.uid]
+    );
 
     // FILTRADO INTELIGENTE: El concejal verá sus votos sin importar si le cambiaron el nombre o número de lista.
     const misV = useMemo(() => {
@@ -86,6 +95,35 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         const p = await buscarPadronPorCedula(bDiaD);
         if (p) setResDiaD({ ...p, v: yaVotaronGlobal[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)], pc: pasoPCGlobal[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)] });
         else setResDiaD("NO");
+    };
+
+    // Autocompleta el nombre del dirigente buscando su cédula en el padrón
+    const buscarCedulaDirigente = async () => {
+        const ci = String(dirForm.cedula || "").trim();
+        if (!ci) return;
+        setDirBuscando(true);
+        const p = await buscarPadronPorCedula(ci);
+        if (p) setDirForm({ cedula: ci, nombre: `${p.nombre} ${p.apellido}`.trim() });
+        else alert("Cédula no encontrada en el padrón (podés cargar el nombre a mano).");
+        setDirBuscando(false);
+    };
+
+    const agregarDirigente = () => {
+        const ci = String(dirForm.cedula || "").trim();
+        const nom = String(dirForm.nombre || "").trim().toUpperCase();
+        if (!ci || !nom) return alert("Completá cédula y nombre del dirigente.");
+        const yaEstaMio = misDirigentes.some(d => String(d.cedula) === ci);
+        if (!yaEstaMio && misDirigentes.length >= MAX_DIRIGENTES) return alert(`Máximo ${MAX_DIRIGENTES} dirigentes.`);
+        const dueno = (asignacionesDirigentes || {})[ci];
+        if (dueno && dueno.concejalUid !== usuarioActivo.uid) return alert(`Esa cédula ya está cargada como dirigente de ${dueno.concejal || "otro concejal"}.`);
+        set(ref(db, `dia_d/asignaciones_dirigentes/${ci}`), {
+            cedula: ci, nombre: nom, concejal: miNom, concejalUid: usuarioActivo.uid,
+            distrito: perfil.distrito, ts: Date.now(),
+        }).then(() => { setDirForm({ cedula: "", nombre: "" }); }).catch(() => alert("No se pudo guardar, reintentá."));
+    };
+
+    const quitarDirigente = (ci) => {
+        if (window.confirm("¿Quitar este dirigente?")) remove(ref(db, `dia_d/asignaciones_dirigentes/${ci}`));
     };
 
     const handleRegistrarConcejal = () => {
@@ -253,6 +291,40 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     }
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {tab === "dirigentes" && (
+                    <div className="animate-fade-in max-w-2xl mx-auto">
+                        <div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-t-emerald-600">
+                            <div className="flex justify-between items-center mb-1">
+                                <h2 className="font-black text-xl text-slate-800 flex items-center gap-2"><UserPlus className="text-emerald-600"/> MIS DIRIGENTES</h2>
+                                <span className={`text-xs font-black px-3 py-1 rounded-full ${misDirigentes.length >= MAX_DIRIGENTES ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{misDirigentes.length} / {MAX_DIRIGENTES}</span>
+                            </div>
+                            <p className="text-xs text-slate-500 font-bold mb-4">Cargá hasta {MAX_DIRIGENTES} dirigentes. Ellos entran al sistema con la cuenta de dirigente y se identifican con SU cédula para consultar y marcar "pasó por PC".</p>
+
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
+                                <div className="flex gap-2 mb-2">
+                                    <input type="number" placeholder="N° Cédula del dirigente" className="flex-1 p-3 border-2 rounded-xl font-bold outline-none focus:border-emerald-500" value={dirForm.cedula} onChange={e=>setDirForm({...dirForm, cedula: e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarCedulaDirigente()} />
+                                    <button onClick={buscarCedulaDirigente} disabled={dirBuscando} className="bg-slate-700 hover:bg-slate-800 text-white px-4 rounded-xl font-bold disabled:opacity-50"><Search size={18}/></button>
+                                </div>
+                                <input type="text" placeholder="Nombre y apellido" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none focus:border-emerald-500 mb-2" value={dirForm.nombre} onChange={e=>setDirForm({...dirForm, nombre: e.target.value})} />
+                                <button onClick={agregarDirigente} disabled={misDirigentes.length >= MAX_DIRIGENTES} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed">{misDirigentes.length >= MAX_DIRIGENTES ? `LÍMITE DE ${MAX_DIRIGENTES} ALCANZADO` : "+ AGREGAR DIRIGENTE"}</button>
+                            </div>
+
+                            <div className="space-y-2">
+                                {misDirigentes.length === 0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Todavía no cargaste dirigentes.</div>}
+                                {misDirigentes.sort((a,b)=>(a.ts||0)-(b.ts||0)).map(d => (
+                                    <div key={d.cedula} className="flex items-center justify-between bg-slate-50 border rounded-xl p-3">
+                                        <div className="min-w-0">
+                                            <div className="font-black text-sm uppercase truncate">{d.nombre}</div>
+                                            <div className="text-[11px] font-bold text-slate-500">C.I: {d.cedula}</div>
+                                        </div>
+                                        <button onClick={()=>quitarDirigente(d.cedula)} className="text-red-500 bg-red-100 hover:bg-red-200 p-2 rounded-lg shrink-0"><Trash2 size={16}/></button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}

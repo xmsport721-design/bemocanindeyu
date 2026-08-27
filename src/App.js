@@ -30,6 +30,7 @@ export default function BemoSystem() {
   const [fotosConcejales, setFotosConcejales] = useState({});
   const [pasoPCGlobal, setPasoPCGlobal] = useState({});
   const [asignacionesVeedores, setAsignacionesVeedores] = useState({});
+  const [asignacionesDirigentes, setAsignacionesDirigentes] = useState({});
   const [veedoresOnline, setVeedoresOnline] = useState({});
   const [escrutinioGlobal, setEscrutinioGlobal] = useState({});
   const [usuariosRegistrados, setUsuariosRegistrados] = useState({});
@@ -63,6 +64,7 @@ export default function BemoSystem() {
         onValue(ref(db, 'concejales_fotos'), (snap) => setFotosConcejales(snap.val() || {}));
         onValue(ref(db, 'dia_d/paso_pc_checkins'), (snap) => setPasoPCGlobal(snap.val() || {}));
         onValue(ref(db, 'dia_d/asignaciones_veedores'), (snap) => setAsignacionesVeedores(snap.val() || {}));
+        onValue(ref(db, 'dia_d/asignaciones_dirigentes'), (snap) => setAsignacionesDirigentes(snap.val() || {}));
         onValue(ref(db, 'dia_d/veedores_online'), (snap) => setVeedoresOnline(snap.val() || {}));
         onValue(ref(db, 'dia_d/escrutinio'), (snap) => setEscrutinioGlobal(snap.val() || {}));
       } else { 
@@ -103,8 +105,8 @@ export default function BemoSystem() {
   
   if (rol === 'pendiente') return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center"><ShieldAlert size={64} className="text-yellow-500 mb-4" /><h1 className="text-2xl font-black mb-2">CUENTA EN REVISIÓN</h1><p className="text-gray-400 mb-8 max-w-sm">Avisa a tu Administrador Local para que active tu acceso.</p><button onClick={()=>signOut(auth)} className="bg-red-600 px-6 py-3 rounded-xl font-bold">CERRAR SESIÓN</button></div>);
   if (rol === 'veedor') return <Suspense fallback={<CargandoPantalla/>}><AppVeedor padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} /></Suspense>;
-  if (rol === 'concejal') return <Suspense fallback={<CargandoPantalla/>}><AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} /></Suspense>;
-  if (rol === 'dirigente') return <Suspense fallback={<CargandoPantalla/>}><AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} configApp={configApp} auth={auth} db={db} /></Suspense>;
+  if (rol === 'concejal') return <Suspense fallback={<CargandoPantalla/>}><AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} asignacionesDirigentes={asignacionesDirigentes} /></Suspense>;
+  if (rol === 'dirigente') return <Suspense fallback={<CargandoPantalla/>}><AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} asignacionesDirigentes={asignacionesDirigentes} configApp={configApp} auth={auth} db={db} /></Suspense>;
   if (rol === 'super_admin' || rol === 'master_departamental') return <Suspense fallback={<CargandoPantalla/>}><AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo} /></Suspense>;
 
   return <div className="min-h-screen flex items-center justify-center"><button onClick={()=>signOut(auth)} className="bg-red-500 text-white p-4 rounded font-bold">ROL NO RECONOCIDO - CERRAR SESIÓN</button></div>;
