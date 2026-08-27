@@ -7,3 +7,9 @@
 
 /static/*
   Cache-Control: public, max-age=31536000, immutable
+
+# La HTML NO se cachea: así cada deploy se ve al instante (no queda apuntando al JS viejo)
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
