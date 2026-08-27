@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
@@ -76,6 +76,19 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         const pct = META_URNAS > 0 ? Math.min(100, Math.round((votaron / META_URNAS) * 100)) : 0;
         return { votaron, falta, pct, cargados: misV.length };
     }, [misV, yaVotaronGlobal, META_URNAS]);
+
+    // Paso por PC: electores de MI lista que ya pasaron por el PC (con quién los marcó)
+    const pasoPC = useMemo(() => {
+        const lista = [];
+        misV.forEach(v => {
+            const pc = pasoPCGlobal[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)];
+            if (pc) lista.push({ ...v, pc });
+        });
+        lista.sort((a, b) => (b.pc.timestamp || 0) - (a.pc.timestamp || 0));
+        const total = misV.length;
+        const pct = total > 0 ? Math.round((lista.length / total) * 100) : 0;
+        return { lista, count: lista.length, pct };
+    }, [misV, pasoPCGlobal]);
 
     // Ranking de coordinadores: total de cargas, cuántos votaron y en qué locales votan
     const rankingCoord = useMemo(() => {
@@ -300,6 +313,30 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                             </div>
                             <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden"><div className="bg-green-500 h-4 rounded-full transition-all duration-500" style={{width: `${urnas.pct}%`}}></div></div>
                             <div className="text-right text-xs font-black text-green-400 mt-1">{urnas.pct}% de la meta</div>
+                        </div>
+
+                        {/* PASO POR PC */}
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                <div className="flex items-center gap-2"><Monitor size={20} className="text-blue-500"/><h2 className="font-black text-lg text-slate-800 uppercase">Paso por PC</h2></div>
+                                <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-blue-600 leading-none">{pasoPC.count}</span><span className="text-xs font-black text-slate-400">de {urnas.cargados} cargados · {pasoPC.pct}%</span></div>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-4"><div className="bg-blue-500 h-3 rounded-full transition-all duration-500" style={{width: `${pasoPC.pct}%`}}></div></div>
+                            <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+                                {pasoPC.lista.map(v => (
+                                    <div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-xl px-3 py-2 gap-2">
+                                        <div className="min-w-0">
+                                            <div className="font-black text-sm uppercase truncate">{v.nombre} {v.apellido}</div>
+                                            <div className="text-[10px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.local}{v.coordinador ? ` · ${v.coordinador}` : ''}</div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-[11px] font-black text-blue-700">📍 {v.pc.hora}</div>
+                                            <div className="text-[9px] font-bold text-slate-400 truncate max-w-[130px]">{v.pc.registradoPorNombre || ''}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {pasoPC.count===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Todavía nadie de tu lista pasó por PC.</div>}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
