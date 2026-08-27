@@ -41,6 +41,29 @@ export default function AppVeedor({ padronGlobal, mesasCerradas, asignacionesVee
         }
     }, [miEsc, isC, configApp, mEdEsc]);
 
+    // ROBUSTO: guarda el acta con respaldo local + envío en 2do plano.
+    // Firebase encola y reintenta solo hasta confirmar (no se traba, no se pierde).
+    const guardarActa = () => {
+        const data = { ...fEsc, timestamp: Date.now(), cargadoPor: vs.nombre };
+        try { localStorage.setItem(`acta_pend_${llMA}`, JSON.stringify(data)); } catch {}
+        set(ref(db, `dia_d/escrutinio/${llMA}`), data)
+            .then(() => { try { localStorage.removeItem(`acta_pend_${llMA}`); } catch {} })
+            .catch(() => {});
+        alert("✅ Acta guardada. Se envía al sistema automáticamente (aunque haya poca señal).");
+        setMEdEsc(false);
+    };
+
+    // Reenvía automáticamente un acta que quedó pendiente (si la app se cerró antes de confirmar).
+    useEffect(() => {
+        if (!llMA) return;
+        try {
+            const pend = localStorage.getItem(`acta_pend_${llMA}`);
+            if (pend) set(ref(db, `dia_d/escrutinio/${llMA}`), JSON.parse(pend))
+                .then(() => { try { localStorage.removeItem(`acta_pend_${llMA}`); } catch {} })
+                .catch(() => {});
+        } catch {}
+    }, [llMA, db]);
+
     const padronMesa = useMemo(() =>
         Object.entries(padronGlobal || {}).map(([ci, d]) => ({ ci, ...d }))
             .filter(p => vs && String(p.mesa) === String(vs.mesa) && p.distrito === vs.distrito && String(p.cod_local) === String(vs.cod_local))
@@ -129,7 +152,7 @@ export default function AppVeedor({ padronGlobal, mesasCerradas, asignacionesVee
                           <div><label className="text-[10px] font-black text-slate-500 uppercase">Nulos</label><input type="number" inputMode="numeric" placeholder="0" className="w-full p-2 font-black text-center border-2 rounded-lg outline-none" value={fEsc.nulos} onChange={e=>setFEsc({...fEsc, nulos: e.target.value})} /></div>
                       </div>
 
-                      <button onClick={()=>{set(ref(db, `dia_d/escrutinio/${llMA}`), {...fEsc, timestamp: Date.now(), cargadoPor: vs.nombre}); alert("✅ Acta Final Guardada en el Sistema."); setMEdEsc(false);}} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-5 rounded-xl font-black shadow-lg text-lg mt-4">GUARDAR ACTA COMPLETA</button>
+                      <button onClick={guardarActa} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-5 rounded-xl font-black shadow-lg text-lg mt-4">GUARDAR Y ENVIAR ACTA</button>
                   </div>
               )}
             </main>
