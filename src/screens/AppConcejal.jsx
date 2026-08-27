@@ -10,7 +10,8 @@ import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLot
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
     const [tab, setTab] = useState("dashboard");
     const [menuAbierto, setMenuAbierto] = useState(false);
-    const META_URNAS = 1200; // meta de votos del concejal (estado de urnas)
+    // Meta de votos del concejal: se define por distrito en Ajustes del panel adm local
+    const META_URNAS = Number(configApp?.meta_concejales) || 1200;
 
     const [bNom, setBNom] = useState("");
     const [resNom, setResNom] = useState([]);
@@ -74,7 +75,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         const falta = Math.max(0, META_URNAS - votaron);
         const pct = META_URNAS > 0 ? Math.min(100, Math.round((votaron / META_URNAS) * 100)) : 0;
         return { votaron, falta, pct, cargados: misV.length };
-    }, [misV, yaVotaronGlobal]);
+    }, [misV, yaVotaronGlobal, META_URNAS]);
 
     // Ranking de coordinadores: total de cargas, cuántos votaron y en qué locales votan
     const rankingCoord = useMemo(() => {
