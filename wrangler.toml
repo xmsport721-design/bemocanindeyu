@@ -1,8 +1,10 @@
 # Cloudflare Workers (Static Assets) — despliegue de la SPA React
-# URL objetivo: control.bemo2026.workers.dev
-#   - name = "control"  -> primera parte de la URL
-#   - subdominio de cuenta "bemo2026" -> se cambia en el dashboard (afecta toda la cuenta)
-name = "control"
+# URL REAL que usan los usuarios: sergiocarrillo2026.bemo.workers.dev
+#   - name = "sergiocarrillo2026"  -> primera parte de la URL
+#   - subdominio de cuenta "bemo" -> se cambia en el dashboard (afecta toda la cuenta)
+# OJO: antes esto decía "control" y los deploys iban a control.bemo.workers.dev,
+#      una URL que NADIE usaba. Ahora apunta al worker correcto.
+name = "sergiocarrillo2026"
 compatibility_date = "2026-07-10"
 workers_dev = true
 
@@ -13,5 +15,5 @@ directory = "./build"
 not_found_handling = "single-page-application"
 
 # --- Cómo desplegar ---
-# Manual desde tu PC:   npm run build ; npx wrangler deploy
-# Git (auto): conectar Workers Builds al Worker "control" en el dashboard.
+# Manual desde tu PC:   npm run build ; npx wrangler deploy   (va a sergiocarrillo2026)
+# Git (auto): Workers Builds conectado al Worker "sergiocarrillo2026" en el dashboard.

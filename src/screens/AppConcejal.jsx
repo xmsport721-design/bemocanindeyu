@@ -265,7 +265,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                     <span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span>
                     <div>
                         <h1 className="text-sm font-bold uppercase">{configApp.intendente||"S/D"}</h1>
-                        <p className="text-[10px] text-red-200 font-bold uppercase">CANDIDATO: {miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito})</p>
+                        <p className="text-[10px] text-red-200 font-bold uppercase">CANDIDATO: {miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito}) <span className="bg-white/20 px-1 rounded ml-1">v2</span></p>
                     </div>
                 </div>
                 <button onClick={()=>signOut(auth)} className="bg-red-950 p-2 rounded-full"><LogOut size={16}/></button>
