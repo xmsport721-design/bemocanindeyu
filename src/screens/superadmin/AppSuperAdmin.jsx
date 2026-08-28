@@ -59,13 +59,19 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         const o = {}; Object.keys(pasoPCGlobal||{}).forEach(k => { if(k.startsWith(distritoFiltroMaster)) o[k] = pasoPCGlobal[k]; }); return o;
     }, [pasoPCGlobal, distritoFiltroMaster]);
 
-    const totalVotosSeguros = votosFiltrados.length;
-    const yaVotaronSeguros = votosFiltrados.filter(v => yaVotaronFiltrados[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
-    
-    // Conteo de calidad de votos global aplicando penalización por duplicado
-    const verde = votosFiltrados.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'VERDE').length;
-    const amarillo = votosFiltrados.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'AMARILLO').length;
-    const rojo = votosFiltrados.filter(v => cedulasDuplicadas.has(v.cedula) || v.semaforo === 'ROJO').length;
+    // DEDUP: cada cédula vale UNO para el total del intendente (un choque entre concejales suma 1)
+    const votosUnicos = useMemo(() => {
+        const seen = new Set(); const out = [];
+        (votosFiltrados || []).forEach(v => { const c = String(v.cedula); if (!seen.has(c)) { seen.add(c); out.push(v); } });
+        return out;
+    }, [votosFiltrados]);
+    const totalVotosSeguros = votosUnicos.length;
+    const yaVotaronSeguros = votosUnicos.filter(v => yaVotaronFiltrados[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
+
+    // Conteo de calidad de votos (sobre cédulas únicas); los duplicados/choques cuentan como Rojo (1)
+    const verde = votosUnicos.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'VERDE').length;
+    const amarillo = votosUnicos.filter(v => !cedulasDuplicadas.has(v.cedula) && v.semaforo === 'AMARILLO').length;
+    const rojo = votosUnicos.filter(v => cedulasDuplicadas.has(v.cedula) || v.semaforo === 'ROJO').length;
 
     const totalVotosEmitidosDiaD = Object.keys(yaVotaronFiltrados || {}).length;
     const participacionIndependiente = totalVotosEmitidosDiaD - yaVotaronSeguros;
@@ -688,8 +694,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                             <button onClick={()=>enviarWhatsAppCarnet(v)} className="text-green-500 hover:text-green-700"><Send size={16}/></button>
                                             <button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[normalizarNombre(v.concejal)])} className="text-slate-700 hover:text-black"><Printer size={16}/></button>
                                             
-                                            {/* BOTÓN LÁPIZ DE EDICIÓN */}
-                                            {!esMaster && (<>
+                                            {/* BOTÓN LÁPIZ DE EDICIÓN (habilitado también para master) */}
+                                            {(<>
                                             <button onClick={()=>{
                                                 setEditandoVotoId(v.id);
                                                 setFormEdicion({

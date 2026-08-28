@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
@@ -68,6 +68,8 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [coordFijo, setCoordFijo] = useState("");
     const [nuevoCoordTel, setNuevoCoordTel] = useState("");
     const [nuevoCoordZona, setNuevoCoordZona] = useState("URBANA");
+    const [nuevoCoordCedula, setNuevoCoordCedula] = useState("");
+    const [nuevoCoordLocalidad, setNuevoCoordLocalidad] = useState("");
     const [coordMeta, setCoordMeta] = useState({}); // { normalizado: {nombre, telefono, zona} }
 
     useEffect(() => {
@@ -75,13 +77,27 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         return () => un();
     }, [db, perfil.distrito]);
 
-    // Estado de urnas (meta del concejal): cuántos de sus cargados ya votaron
+    // DEDUP: una cédula vale UNO para la meta (aunque esté cargada 2+ veces)
+    const misVUnicos = useMemo(() => {
+        const seen = new Set(); const out = [];
+        misV.forEach(v => { const c = String(v.cedula); if (!seen.has(c)) { seen.add(c); out.push(v); } });
+        return out;
+    }, [misV]);
+
+    // AUDITORÍA: electores que aparecen 2+ veces en TU lista (con qué coordinadores)
+    const misDuplicados = useMemo(() => {
+        const byCedula = {};
+        misV.forEach(v => { const c = String(v.cedula); (byCedula[c] = byCedula[c] || []).push(v); });
+        return Object.values(byCedula).filter(arr => arr.length > 1).sort((a, b) => b.length - a.length);
+    }, [misV]);
+
+    // Estado de urnas (meta del concejal): cuántos de sus cargados ÚNICOS ya votaron
     const urnas = useMemo(() => {
-        const votaron = misV.filter(v => yaVotaronGlobal[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
+        const votaron = misVUnicos.filter(v => yaVotaronGlobal[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)]).length;
         const falta = Math.max(0, META_URNAS - votaron);
         const pct = META_URNAS > 0 ? Math.min(100, Math.round((votaron / META_URNAS) * 100)) : 0;
-        return { votaron, falta, pct, cargados: misV.length };
-    }, [misV, yaVotaronGlobal, META_URNAS]);
+        return { votaron, falta, pct, cargados: misVUnicos.length, duplicados: misV.length - misVUnicos.length };
+    }, [misV, misVUnicos, yaVotaronGlobal, META_URNAS]);
 
     // Paso por PC: electores de MI lista que ya pasaron por el PC (con quién los marcó)
     const pasoPC = useMemo(() => {
@@ -258,15 +274,16 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
             if(!form.cedula||!form.nombre)return alert("Datos incompletos");
             if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado por ti.");
             const coordFinal = coordFijo || form.coordinador; // carga rápida: usa el coordinador fijado
-            const d={...form, coordinador: coordFinal, concejal: miNom, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()};
+            const coordCed = mNC ? nuevoCoordCedula : (coordMeta[normalizarNombre(coordFinal)]?.cedula || "");
+            const d={...form, coordinador: coordFinal, coordinadorCedula: coordCed, concejal: miNom, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()};
             push(ref(db,'votos_seguros'), d);
-            // Si es un coordinador nuevo con datos, guarda su ficha (teléfono + zona)
-            if (mNC && coordFinal && (nuevoCoordTel || nuevoCoordZona)) {
-                set(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(coordFinal)}`), { nombre: coordFinal, telefono: nuevoCoordTel, zona: nuevoCoordZona, concejal: miNom, ts: Date.now() }).catch(()=>{});
+            // Ficha del coordinador (cédula = clave de identidad, aunque cambie de localidad/zona)
+            if (mNC && coordFinal) {
+                set(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(coordFinal)}`), { nombre: coordFinal, cedula: nuevoCoordCedula, telefono: nuevoCoordTel, zona: nuevoCoordZona, localidad: nuevoCoordLocalidad, concejal: miNom, ts: Date.now() }).catch(()=>{});
             }
             // Limpia el elector; si hay coordinador fijo, lo mantiene para seguir cargando su lista
             setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijo || ""}));
-            setMNC(false); setNuevoCoordTel("");
+            setMNC(false); setNuevoCoordTel(""); setNuevoCoordCedula(""); setNuevoCoordLocalidad("");
         });
     };
 
@@ -274,6 +291,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         { id: "dashboard", label: "PANEL", icon: LayoutDashboard },
         { id: "registro", label: "REGISTRO", icon: CheckCircle },
         { id: "lista", label: "LISTA", icon: Users },
+        { id: "auditoria", label: "AUDITORÍA", icon: AlertTriangle },
         { id: "dia_d_buscador", label: "DÍA D BUSCADOR", icon: Search },
         { id: "proyecciones", label: "PROYECCIONES", icon: BarChart3 },
         { id: "live", label: "LIVE", icon: Bell },
@@ -463,7 +481,9 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                 )}
                                 {mNC && (
                                     <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <input type="number" placeholder="CÉDULA COORD. (clave)" className="p-3 border-2 border-red-200 rounded-lg font-bold outline-none text-sm" value={nuevoCoordCedula} onChange={e=>setNuevoCoordCedula(e.target.value)} />
                                         <input type="text" placeholder="TEL. COORDINADOR" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none text-sm" value={nuevoCoordTel} onChange={e=>setNuevoCoordTel(e.target.value)} />
+                                        <input type="text" placeholder="LOCALIDAD" className="p-3 border-2 rounded-lg font-bold uppercase outline-none text-sm" value={nuevoCoordLocalidad} onChange={e=>setNuevoCoordLocalidad(e.target.value.toUpperCase())} />
                                         <select className="p-3 border-2 rounded-lg font-bold outline-none text-sm" value={nuevoCoordZona} onChange={e=>setNuevoCoordZona(e.target.value)}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
                                     </div>
                                 )}
@@ -622,6 +642,35 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         </div>
                     </div>
                 )}
+                {tab === "auditoria" && (
+                    <div className="animate-fade-in max-w-3xl mx-auto">
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <div className="flex items-center gap-2 mb-1"><AlertTriangle size={20} className="text-red-500"/><h2 className="font-black text-lg text-slate-800 uppercase">Auditoría de duplicados</h2></div>
+                            <p className="text-xs text-slate-500 font-bold mb-4">Electores cargados 2+ veces en tu lista. Cada cédula <b>suma solo 1</b> para tu meta. Revisá con qué coordinador quedó cada uno y borrá la carga de más.</p>
+                            <div className="flex gap-3 mb-4 flex-wrap">
+                                <span className="bg-red-100 text-red-700 font-black px-3 py-1 rounded-full text-sm">{misDuplicados.length} cédulas duplicadas</span>
+                                <span className="bg-slate-100 text-slate-600 font-black px-3 py-1 rounded-full text-sm">{urnas.duplicados} cargas de más</span>
+                            </div>
+                            <div className="space-y-3">
+                                {misDuplicados.map(grupo => (
+                                    <div key={grupo[0].cedula} className="border-2 border-red-200 rounded-2xl p-3 bg-red-50/40">
+                                        <div className="flex justify-between items-center mb-2 gap-2"><div className="font-black text-sm uppercase truncate">{grupo[0].nombre} {grupo[0].apellido}</div><span className="text-[11px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded shrink-0">CI {grupo[0].cedula} · x{grupo.length}</span></div>
+                                        <div className="space-y-1">
+                                            {grupo.map(v => (
+                                                <div key={v.id} className="flex items-center justify-between bg-white border rounded-lg px-2 py-1.5">
+                                                    <div className="text-[11px] font-bold text-slate-600 truncate">👤 Coord: <b className="uppercase">{v.coordinador || 'SIN ASIGNAR'}</b></div>
+                                                    <button onClick={()=>{ if(window.confirm('¿Borrar esta carga duplicada?')) remove(ref(db, `votos_seguros/${v.id}`)); }} className="text-red-500 bg-red-100 hover:bg-red-200 p-1.5 rounded-lg shrink-0 ml-2"><Trash2 size={14}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {misDuplicados.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">✅ Sin duplicados en tu lista.</div>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {tab === "proyecciones" && (() => {
                     const verdes = misV.filter(v=>v.semaforo==='VERDE' && !cedulasDuplicadas.has(v.cedula)).length;
                     const amar = misV.filter(v=>v.semaforo==='AMARILLO' && !cedulasDuplicadas.has(v.cedula)).length;
