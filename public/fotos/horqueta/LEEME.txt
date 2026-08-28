@@ -1,0 +1,15 @@
+CARPETA DE FOTOS - HORQUETA
+============================
+Poné acá las fotos oficiales de los candidatos de Horqueta.
+
+- Formato: JPG (o PNG), cuadradas si se puede (se recortan redondas).
+- Nombre de archivo: exactamente el que te indique el sistema (te lo paso
+  en base a los nombres cargados en la lista).
+
+Ejemplo:
+  intendente.jpg              -> Sergio Carrillo (intendente)
+  16-1-juan_perez.jpg         -> concejal Juan Perez (equipo/lista 16-1)
+  16-2-maria_gonzalez.jpg     -> concejal Maria Gonzalez
+  ...
+
+Cuando reemplaces los archivos con las fotos reales, avisá y despliego.
