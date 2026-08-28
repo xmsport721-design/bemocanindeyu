@@ -53,3 +53,9 @@ export async function cargaMarcarImportada(token) {
   const { error } = await supabase.rpc("carga_marcar_importada", { p_token: token });
   if (error) throw error;
 }
+
+// Concejal logueado: elimina una carga (link) y sus filas
+export async function cargaEliminar(token) {
+  const { error } = await supabase.rpc("carga_eliminar", { p_token: token });
+  if (error) throw error;
+}

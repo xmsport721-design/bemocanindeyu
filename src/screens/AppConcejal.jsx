@@ -6,7 +6,7 @@ import { concejalCoincide, normalizarNombre, imprimirCarnetFisico, enviarWhatsAp
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
 import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLote } from "../lib/padronSupabase";
-import { cargaCrear, cargaListar, cargaFilasGet, cargaMarcarImportada } from "../lib/cargaCoordinador";
+import { cargaCrear, cargaListar, cargaFilasGet, cargaMarcarImportada, cargaEliminar } from "../lib/cargaCoordinador";
 
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
     const [tab, setTab] = useState("registro");
@@ -297,6 +297,12 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     // Fase 3: generar link público, listar cargas recibidas e importar
     const refrescarCargas = async () => { const list = await cargaListar(perfil.distrito); setCargasList(list.filter(c => c.concejal_fijo === miNom)); };
+
+    const eliminarCargaLista = async (token) => {
+        if (!window.confirm("¿Eliminar esta lista/link?")) return;
+        try { await cargaEliminar(token); refrescarCargas(); }
+        catch (e) { alert("No se pudo eliminar. ¿Corriste el SQL nuevo (carga_eliminar)?\n" + (e.message || "")); }
+    };
 
     const buscarCoordCedula = async () => {
         const ci = String(coordForm.cedula).trim();
@@ -789,13 +795,16 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                             <div className="font-black text-sm uppercase truncate">{c.coordinador_nombre}</div>
                                             <div className="text-[10px] font-bold text-slate-400">{c.filas} personas · {c.estado}{c.zona?` · ${c.zona}`:''}</div>
                                         </div>
-                                        {c.estado === "enviado" ? (
-                                            <button onClick={()=>importarCarga(c)} disabled={importando===c.token} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-black text-xs shrink-0 disabled:opacity-50">{importando===c.token ? "IMPORTANDO..." : "IMPORTAR"}</button>
-                                        ) : c.estado === "importado" ? (
-                                            <span className="text-[11px] font-black text-green-600 shrink-0">✅ IMPORTADO</span>
-                                        ) : (
-                                            <span className="text-[11px] font-black text-slate-400 shrink-0">⏳ CARGANDO</span>
-                                        )}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {c.estado === "enviado" ? (
+                                                <button onClick={()=>importarCarga(c)} disabled={importando===c.token} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-black text-xs disabled:opacity-50">{importando===c.token ? "IMPORTANDO..." : "IMPORTAR"}</button>
+                                            ) : c.estado === "importado" ? (
+                                                <span className="text-[11px] font-black text-green-600">✅ IMPORTADO</span>
+                                            ) : (
+                                                <span className="text-[11px] font-black text-slate-400">⏳ CARGANDO</span>
+                                            )}
+                                            <button onClick={()=>eliminarCargaLista(c.token)} title="Eliminar esta lista/link" className="bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-lg"><Trash2 size={15}/></button>
+                                        </div>
                                     </div>
                                 ))}
                                 {cargasList.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">No hay cargas todavía.</div>}

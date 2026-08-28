@@ -112,6 +112,15 @@ language sql security definer set search_path=public stable as $$
 $$;
 grant execute on function carga_filas_get(text) to anon, authenticated;
 
+-- ── Concejal logueado: elimina una carga (y sus filas por cascade) ──
+create or replace function carga_eliminar(p_token text)
+returns void language plpgsql security definer set search_path=public as $$
+begin
+  if (auth.jwt() ->> 'sub') is null then raise exception 'no autorizado'; end if;
+  delete from cargas_coordinador where token = p_token;
+end $$;
+grant execute on function carga_eliminar(text) to anon, authenticated;
+
 -- ── Concejal logueado: marca la carga como importada ──
 create or replace function carga_marcar_importada(p_token text)
 returns void language plpgsql security definer set search_path=public as $$
