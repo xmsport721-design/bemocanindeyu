@@ -7,8 +7,6 @@
 -- Seguridad: las tablas están 100% bloqueadas por RLS (deny-all). TODO pasa por
 -- funciones RPC SECURITY DEFINER. El token es la llave de acceso del coordinador.
 -- ============================================================================
-create extension if not exists pgcrypto;
-
 create table if not exists cargas_coordinador (
   token text PRIMARY KEY,
   tenant_id text NOT NULL DEFAULT 'bemo',
@@ -50,7 +48,7 @@ returns text language plpgsql security definer set search_path=public as $$
 declare v_token text;
 begin
   if (auth.jwt() ->> 'sub') is null then raise exception 'no autorizado'; end if;
-  v_token := encode(gen_random_bytes(9), 'hex');
+  v_token := substr(md5(random()::text || clock_timestamp()::text || coalesce(p_coordinador_nombre,'')), 1, 18);
   insert into cargas_coordinador(token, distrito, zona, coordinador_nombre, coordinador_telefono, concejal_fijo, concejales_disponibles, generado_por)
   values (v_token, upper(p_distrito), p_zona, upper(p_coordinador_nombre), p_coordinador_telefono, p_concejal_fijo, p_concejales, coalesce(auth.jwt()->>'email','?'));
   return v_token;
