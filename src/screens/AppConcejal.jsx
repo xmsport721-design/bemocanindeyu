@@ -53,10 +53,8 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     }, [votosSeguros, perfil.distrito]);
 
     const [lim, setLim] = useState(50);
-    const mCoor = [...new Set(misV.map(v=>v.coordinador).filter(c=>c))];
     const [fC, setFC] = useState("TODOS");
     const [fS, setFS] = useState("TODOS");
-    const [mNC, setMNC] = useState(false);
 
     // Carga masiva por coordinador (pegar/CSV de cédulas + cruzamiento con padrón)
     const [masivoTexto, setMasivoTexto] = useState("");
@@ -65,17 +63,14 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [masivoResult, setMasivoResult] = useState(null); // { encontrados:[], noEncontrados:[], telMap:{} }
     const [masivoGuardando, setMasivoGuardando] = useState(false);
 
-    // Coordinador fijado (carga rápida de su lista) + datos del nuevo coordinador
+    // Coordinador fijado (carga rápida de su lista)
     const [coordFijo, setCoordFijo] = useState("");
-    const [nuevoCoordTel, setNuevoCoordTel] = useState("");
-    const [nuevoCoordZona, setNuevoCoordZona] = useState("URBANA");
-    const [nuevoCoordCedula, setNuevoCoordCedula] = useState("");
-    const [nuevoCoordLocalidad, setNuevoCoordLocalidad] = useState("");
-    const [coordMeta, setCoordMeta] = useState({}); // { normalizado: {nombre, telefono, zona} }
+    const [coordMeta, setCoordMeta] = useState({}); // { normalizado: {nombre, cedula, telefono, localidad, zona} }
 
-    // Fase 3: link público de coordinador
-    const [linkForm, setLinkForm] = useState({ coordinador: "", telefono: "", zona: "URBANA" });
-    const [linkNuevo, setLinkNuevo] = useState("");
+    // Coordinadores se crean en LINK COORDINADOR (con cédula + localidad + zona)
+    const [coordForm, setCoordForm] = useState({ cedula: "", nombre: "", telefono: "", localidad: "", zona: "URBANA" });
+    const [coordBuscando, setCoordBuscando] = useState(false);
+    const [linksGenerados, setLinksGenerados] = useState({}); // { nombre: url }
     const [cargasList, setCargasList] = useState([]);
     const [importando, setImportando] = useState("");
 
@@ -85,6 +80,14 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     }, [db, perfil.distrito]);
 
     useEffect(() => { if (tab === "carga_link") cargaListar(perfil.distrito).then(setCargasList); }, [tab, perfil.distrito]);
+
+    // Coordinadores creados (en LINK COORDINADOR) + nombres para el select de REGISTRO
+    const coordinadoresLista = useMemo(() => Object.values(coordMeta || {}).filter(c => c && c.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre)), [coordMeta]);
+    const coordNombres = useMemo(() => {
+        const s = new Set(coordinadoresLista.map(c => c.nombre));
+        misV.forEach(v => { if (v.coordinador) s.add(v.coordinador); });
+        return [...s].filter(Boolean).sort();
+    }, [coordinadoresLista, misV]);
 
     // DEDUP: una cédula vale UNO para la meta (aunque esté cargada 2+ veces)
     const misVUnicos = useMemo(() => {
@@ -188,7 +191,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     // Refrescar: limpia el formulario para una nueva búsqueda (mantiene coordinador fijo)
     const refrescarBusqueda = () => {
-        setForm(f => ({ ...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijo || (mNC ? f.coordinador : "") }));
+        setForm(f => ({ ...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijo || "" }));
         setResNom([]); setBNom("");
     };
 
@@ -281,13 +284,31 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     // Fase 3: generar link público, listar cargas recibidas e importar
     const refrescarCargas = async () => { setCargasList(await cargaListar(perfil.distrito)); };
 
-    const generarLink = async () => {
-        if (!linkForm.coordinador.trim()) return alert("Poné el nombre del coordinador.");
+    const buscarCoordCedula = async () => {
+        const ci = String(coordForm.cedula).trim();
+        if (!ci) return;
+        setCoordBuscando(true);
+        const p = await buscarPadronPorCedula(ci);
+        if (p) setCoordForm(f => ({ ...f, nombre: `${p.nombre} ${p.apellido}`.trim() }));
+        else alert("Cédula no encontrada en el padrón. Podés escribir el nombre a mano.");
+        setCoordBuscando(false);
+    };
+
+    const guardarCoordinador = () => {
+        const nombre = String(coordForm.nombre).trim().toUpperCase();
+        if (!nombre) return alert("Buscá la cédula o escribí el nombre del coordinador.");
+        set(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(nombre)}`), {
+            nombre, cedula: coordForm.cedula, telefono: coordForm.telefono, localidad: coordForm.localidad, zona: coordForm.zona, concejal: miNom, ts: Date.now(),
+        }).then(() => { setCoordForm({ cedula: "", nombre: "", telefono: "", localidad: "", zona: "URBANA" }); })
+          .catch(() => alert("No se pudo guardar."));
+    };
+
+    const generarLinkPara = async (c) => {
         try {
-            const token = await cargaCrear({ distrito: perfil.distrito, zona: linkForm.zona, coordinador: linkForm.coordinador.trim().toUpperCase(), telefono: linkForm.telefono, concejalFijo: miNom, concejales: configApp.concejales || [] });
-            setLinkNuevo(`${window.location.origin}/?carga=${token}`);
+            const token = await cargaCrear({ distrito: perfil.distrito, zona: c.zona, coordinador: c.nombre, telefono: c.telefono, concejalFijo: miNom, concejales: configApp.concejales || [] });
+            setLinksGenerados(prev => ({ ...prev, [c.nombre]: `${window.location.origin}/?carga=${token}` }));
             refrescarCargas();
-        } catch (e) { alert("No se pudo crear el link. ¿Corriste el SQL de la Fase 3 en Supabase?\n" + (e.message || "")); }
+        } catch (e) { alert("No se pudo crear el link. ¿Corriste el SQL de la Fase 3?\n" + (e.message || "")); }
     };
 
     const importarCarga = async (c) => {
@@ -318,17 +339,12 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         import('firebase/database').then(({ push, ref }) => {
             if(!form.cedula||!form.nombre)return alert("Datos incompletos");
             if(misV.find(v=>v.cedula===form.cedula))return alert("Ya registrado por ti.");
-            const coordFinal = coordFijo || form.coordinador; // carga rápida: usa el coordinador fijado
-            const coordCed = mNC ? nuevoCoordCedula : (coordMeta[normalizarNombre(coordFinal)]?.cedula || "");
+            const coordFinal = coordFijo || form.coordinador; // coordinador seleccionado/fijado
+            const coordCed = coordMeta[normalizarNombre(coordFinal)]?.cedula || "";
             const d={...form, coordinador: coordFinal, coordinadorCedula: coordCed, concejal: miNom, registradoPor:usuarioActivo.email, fecha:new Date().toLocaleString()};
             push(ref(db,'votos_seguros'), d);
-            // Ficha del coordinador (cédula = clave de identidad, aunque cambie de localidad/zona)
-            if (mNC && coordFinal) {
-                set(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(coordFinal)}`), { nombre: coordFinal, cedula: nuevoCoordCedula, telefono: nuevoCoordTel, zona: nuevoCoordZona, localidad: nuevoCoordLocalidad, concejal: miNom, ts: Date.now() }).catch(()=>{});
-            }
             // Limpia el elector; si hay coordinador fijo, lo mantiene para seguir cargando su lista
             setForm(f=>({...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijo || ""}));
-            setMNC(false); setNuevoCoordTel(""); setNuevoCoordCedula(""); setNuevoCoordLocalidad("");
         });
     };
 
@@ -518,21 +534,11 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     </div>
                                 ) : (
                                     <div className="flex gap-2">
-                                        {!mNC ? (
-                                            <><select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{mCoor.map(c => <option key={c} value={c}>{c}</option>)}</select><button onClick={()=>{setMNC(true); setForm({...form, coordinador:""})}} className="bg-slate-200 px-4 rounded-xl font-black text-xl" title="Nuevo coordinador">+</button>{form.coordinador && <button onClick={()=>setCoordFijo(form.coordinador)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-xl font-black transition-colors" title="Fijar para cargar su lista rápido"><Pin size={16}/></button>}</>
-                                        ) : (
-                                            <><input type="text" className="flex-1 p-4 border-2 rounded-xl font-bold uppercase outline-none" placeholder="NUEVO..." value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value.toUpperCase()})}/><button onClick={()=>{setMNC(false); setForm({...form, coordinador:""})}} className="bg-red-100 text-red-700 px-4 rounded-xl font-black text-xl">×</button></>
-                                        )}
+                                        <select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{coordNombres.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                        {form.coordinador && <button onClick={()=>setCoordFijo(form.coordinador)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-xl font-black transition-colors" title="Fijar para cargar su lista rápido"><Pin size={16}/></button>}
                                     </div>
                                 )}
-                                {mNC && (
-                                    <div className="grid grid-cols-2 gap-2 mt-2">
-                                        <input type="number" placeholder="CÉDULA COORD. (clave)" className="p-3 border-2 border-red-200 rounded-lg font-bold outline-none text-sm" value={nuevoCoordCedula} onChange={e=>setNuevoCoordCedula(e.target.value)} />
-                                        <input type="text" placeholder="TEL. COORDINADOR" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none text-sm" value={nuevoCoordTel} onChange={e=>setNuevoCoordTel(e.target.value)} />
-                                        <input type="text" placeholder="LOCALIDAD" className="p-3 border-2 rounded-lg font-bold uppercase outline-none text-sm" value={nuevoCoordLocalidad} onChange={e=>setNuevoCoordLocalidad(e.target.value.toUpperCase())} />
-                                        <select className="p-3 border-2 rounded-lg font-bold outline-none text-sm" value={nuevoCoordZona} onChange={e=>setNuevoCoordZona(e.target.value)}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
-                                    </div>
-                                )}
+                                <p className="text-[9px] font-bold text-slate-400 mt-1">¿Falta un coordinador? Agregalo en <b>LINK COORDINADOR</b>.</p>
                             </div>
                             <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COLOR</label><select className={`w-full p-4 rounded-xl font-black text-white outline-none ${form.semaforo==='VERDE'?'bg-green-500':form.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={form.semaforo} onChange={e=>setForm({...form, semaforo: e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div>
                         </div>
@@ -549,7 +555,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                 )}
                                 <label className="p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-500 text-center cursor-pointer hover:bg-slate-50 flex items-center justify-center gap-2"><Upload size={16}/> Subir CSV/TXT<input type="file" accept=".csv,.txt" className="hidden" onChange={leerArchivoMasivo}/></label>
                             </div>
-                            <datalist id="coordListMasivo">{mCoor.map(c=><option key={c} value={c}/>)}</datalist>
+                            <datalist id="coordListMasivo">{coordNombres.map(c=><option key={c} value={c}/>)}</datalist>
                             <textarea rows={5} placeholder={"7684189\n1234567, 0981123456"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none focus:border-emerald-500 mb-3" value={masivoTexto} onChange={e=>setMasivoTexto(e.target.value)} />
                             <button onClick={cruzarMasivo} disabled={masivoCargando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50">{masivoCargando ? "CRUZANDO CON PADRÓN..." : "CRUZAR CON PADRÓN"}</button>
 
@@ -586,7 +592,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                 {rankingCoord.length===0 && <div className="text-center text-gray-400 font-bold text-xs p-2">Sin cargas aún.</div>}
                             </div>
                         </div>
-                        <div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{mCoor.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
+                        <div className="flex gap-4 mb-4"><select className="p-2 border rounded font-bold text-xs flex-1" value={fC} onChange={e=>{setFC(e.target.value);setLim(50);}}><option value="TODOS">COORD: TODOS</option>{coordNombres.map(c=><option key={c}>{c}</option>)}</select><select className="p-2 border rounded font-bold text-xs flex-1" value={fS} onChange={e=>{setFS(e.target.value);setLim(50);}}><option value="TODOS">COLOR: TODOS</option><option value="VERDE">VERDE</option><option value="AMARILLO">AMARILLO</option><option value="ROJO">ROJO</option></select></div>
                         <table className="w-full text-left min-w-[600px]"><thead className="bg-red-50 text-red-900 text-[10px] uppercase"><tr><th className="p-3">Elector</th><th className="p-3">Día D</th><th className="p-3 text-center">Acción</th></tr></thead><tbody className="divide-y text-sm">
                             {misV.filter(v=>(fC==="TODOS"||v.coordinador===fC)&&(fS==="TODOS"||v.semaforo===fS)).slice(0,lim).map(v=>{
                                 const vot = yaVotaronGlobal[generarLlave(v.distrito,v.cod_local,v.mesa,v.orden)];
@@ -691,24 +697,46 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                 {tab === "carga_link" && (
                     <div className="animate-fade-in max-w-2xl mx-auto space-y-5">
                         <div className="bg-white p-5 rounded-3xl shadow border">
-                            <h2 className="font-black text-lg text-slate-800 flex items-center gap-2 mb-1"><Send className="text-emerald-600" size={20}/> LINK PARA COORDINADOR</h2>
-                            <p className="text-xs text-slate-500 font-bold mb-4">Generá un link único. Tu coordinador entra SIN usuario ni clave, carga sus cédulas y las envía. Después vos las revisás y cargás.</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-                                <input type="text" placeholder="NOMBRE COORDINADOR" className="p-3 border-2 rounded-xl font-bold uppercase outline-none" value={linkForm.coordinador} onChange={e=>setLinkForm({...linkForm, coordinador:e.target.value.toUpperCase()})}/>
-                                <input type="text" placeholder="TELÉFONO" className="p-3 border-2 rounded-xl font-bold outline-none" value={linkForm.telefono} onChange={e=>setLinkForm({...linkForm, telefono:e.target.value})}/>
-                                <select className="p-3 border-2 rounded-xl font-bold outline-none" value={linkForm.zona} onChange={e=>setLinkForm({...linkForm, zona:e.target.value})}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
+                            <h2 className="font-black text-lg text-slate-800 flex items-center gap-2 mb-1"><UserPlus className="text-emerald-600" size={20}/> AGREGAR COORDINADOR</h2>
+                            <p className="text-xs text-slate-500 font-bold mb-4">Buscá su cédula, agregá localidad y zona. Aparece en REGISTRO para seleccionarlo, y podés enviarle un link para que cargue su lista.</p>
+                            <div className="flex gap-2 mb-2">
+                                <input type="number" placeholder="CÉDULA DEL COORDINADOR" className="flex-1 p-3 border-2 rounded-xl font-bold text-center outline-none focus:border-emerald-500" value={coordForm.cedula} onChange={e=>setCoordForm({...coordForm, cedula:e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarCoordCedula()} />
+                                <button onClick={buscarCoordCedula} disabled={coordBuscando} className="bg-slate-800 text-white px-5 rounded-xl font-black disabled:opacity-50">{coordBuscando?'...':<Search size={18}/>}</button>
                             </div>
-                            <button onClick={generarLink} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors">GENERAR LINK</button>
-                            {linkNuevo && (
-                                <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
-                                    <div className="text-[11px] font-black text-emerald-700 mb-1">✅ Link listo — compartilo:</div>
-                                    <div className="text-xs font-mono break-all bg-white border rounded p-2 mb-2">{linkNuevo}</div>
-                                    <div className="flex gap-2">
-                                        <button onClick={()=>{navigator.clipboard?.writeText(linkNuevo); alert('Copiado');}} className="flex-1 bg-slate-800 text-white py-2 rounded-lg font-black text-xs">COPIAR</button>
-                                        <a href={`https://wa.me/?text=${encodeURIComponent('Cargá tu gente acá: '+linkNuevo)}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-600 text-white py-2 rounded-lg font-black text-xs text-center">WHATSAPP</a>
+                            <input type="text" placeholder="NOMBRE Y APELLIDO" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none mb-2" value={coordForm.nombre} onChange={e=>setCoordForm({...coordForm, nombre:e.target.value.toUpperCase()})} />
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                <input type="text" placeholder="TELÉFONO" className="p-3 border-2 border-blue-200 rounded-xl font-bold outline-none" value={coordForm.telefono} onChange={e=>setCoordForm({...coordForm, telefono:e.target.value})} />
+                                <input type="text" placeholder="LOCALIDAD" className="p-3 border-2 rounded-xl font-bold uppercase outline-none" value={coordForm.localidad} onChange={e=>setCoordForm({...coordForm, localidad:e.target.value.toUpperCase()})} />
+                            </div>
+                            <select className="w-full p-3 border-2 rounded-xl font-bold outline-none mb-3" value={coordForm.zona} onChange={e=>setCoordForm({...coordForm, zona:e.target.value})}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
+                            <button onClick={guardarCoordinador} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors">+ GUARDAR COORDINADOR</button>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black text-sm uppercase text-slate-500 mb-3">Mis coordinadores ({coordinadoresLista.length})</h3>
+                            <div className="space-y-2">
+                                {coordinadoresLista.map(c => (
+                                    <div key={c.nombre} className="border rounded-2xl p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="font-black text-sm uppercase truncate">{c.nombre}</div>
+                                                <div className="text-[10px] font-bold text-slate-400 truncate">{c.cedula?`CI ${c.cedula} · `:''}{c.localidad||''} {c.zona?`· ${c.zona}`:''}{c.telefono?` · 📞 ${c.telefono}`:''}</div>
+                                            </div>
+                                            <button onClick={()=>generarLinkPara(c)} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg font-black text-xs shrink-0 flex items-center gap-1"><Send size={14}/> LINK</button>
+                                        </div>
+                                        {linksGenerados[c.nombre] && (
+                                            <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2">
+                                                <div className="text-[10px] font-mono break-all bg-white border rounded p-2 mb-2">{linksGenerados[c.nombre]}</div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={()=>{navigator.clipboard?.writeText(linksGenerados[c.nombre]); alert('Copiado');}} className="flex-1 bg-slate-800 text-white py-1.5 rounded-lg font-black text-[11px]">COPIAR</button>
+                                                    <a href={`https://wa.me/${c.telefono?c.telefono.replace(/\D/g,''):''}?text=${encodeURIComponent('Cargá tu gente acá: '+linksGenerados[c.nombre])}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-600 text-white py-1.5 rounded-lg font-black text-[11px] text-center">WHATSAPP</a>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            )}
+                                ))}
+                                {coordinadoresLista.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Agregá tu primer coordinador arriba.</div>}
+                            </div>
                         </div>
                         <div className="bg-white p-5 rounded-3xl shadow border">
                             <div className="flex items-center justify-between mb-3"><h3 className="font-black text-sm uppercase text-slate-500">Cargas recibidas</h3><button onClick={refrescarCargas} className="text-slate-400 hover:text-slate-700"><RefreshCw size={16}/></button></div>
