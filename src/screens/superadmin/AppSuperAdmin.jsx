@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { ref, push, onValue, set, remove } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, ChevronDown } from "lucide-react";
+import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, Menu, X } from "lucide-react";
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
@@ -14,7 +14,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
     const [distritoFiltroMaster, setDistritoFiltroMaster] = useState(esMaster ? "TODOS" : perfil.distrito);
     const [activeTab, setActiveTab] = useState(esMaster ? "lista" : "registro");
-    const [menuAbierto, setMenuAbierto] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [concejalEnDetalle, setConcejalEnDetalle] = useState(null);
     const [filtroTexto, setFiltroTexto] = useState(""); 
     
@@ -419,7 +419,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         <div className="min-h-screen bg-slate-50 pb-20">
             <header className="bg-slate-900 text-white p-4 shadow-xl border-b-4 border-red-600 sticky top-0 z-50 print:hidden">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
                         <div className="bg-red-700 p-2 rounded-lg font-black text-white">BEMO</div>
                         <div>
                             {distritoFiltroMaster === "TODOS" ? (
@@ -463,62 +464,34 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                 </div>
             )}
 
-            <div className="bg-white flex border-b shadow-sm sticky top-[68px] z-50 print:hidden px-2 items-center justify-center w-full">
-                
-                <div className="flex items-center max-w-full pt-2 pb-2">
-                    
-                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
-                        {!esMaster && <button onClick={() => {setActiveTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><CheckCircle size={16}/> REGISTRO</button>}
-                        
-                        <button onClick={() => {setActiveTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><Users size={16}/> LISTA</button>
-                        
-                        <button onClick={() => {setActiveTab("dashboard"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'dashboard' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><BarChart3 size={16}/> PROYECCIONES</button>
-                        
-                        <button onClick={() => {setActiveTab("dia_d"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${activeTab === 'dia_d' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}><Bell size={16}/> LIVE / MESAS</button>
-                    </div>
-
-                    <div className="relative shrink-0 border-l border-slate-200 pl-2">
-                        
-                        <button 
-                            onClick={() => setMenuAbierto(!menuAbierto)} 
-                            className={`p-2 px-3 font-black text-[11px] flex gap-1 items-center rounded-lg transition-colors ${menuAbierto ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                        >
-                            MÁS OPCIONES <ChevronDown size={14} className={`transition-transform duration-200 ${menuAbierto ? 'rotate-180' : ''}`}/>
-                        </button>
-
-                        {menuAbierto && (
-                            <div className="absolute right-0 top-full mt-2 w-52 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.2)] rounded-xl z-[100] overflow-hidden flex flex-col border border-slate-200 animate-fade-in py-1">
-                                
-                                <button onClick={() => {setActiveTab("escrutinio"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${activeTab === 'escrutinio' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                                    <Calculator size={16} className={activeTab === 'escrutinio' ? "text-red-500" : "text-slate-400"}/> ESCRUTINIO FINAL
+            <div className="flex">
+                {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={()=>setSidebarOpen(false)}/>}
+                <aside className={`fixed lg:sticky top-0 lg:top-[73px] left-0 h-screen lg:h-[calc(100vh-73px)] w-64 bg-white border-r border-slate-200 shadow-xl lg:shadow-none z-50 lg:z-30 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col shrink-0 print:hidden`}>
+                    <div className="p-4 border-b flex justify-between items-center lg:hidden"><span className="font-black text-slate-800">MEN&Uacute;</span><button onClick={()=>setSidebarOpen(false)} className="p-1 text-slate-400"><X size={20}/></button></div>
+                    <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+                        {[
+                            ...(!esMaster ? [{ id:"registro", label:"REGISTRO", icon:CheckCircle }] : []),
+                            { id:"lista", label:"LISTA", icon:Users },
+                            { id:"dashboard", label:"PROYECCIONES", icon:BarChart3 },
+                            { id:"dia_d", label:"LIVE / MESAS", icon:Bell },
+                            { id:"escrutinio", label:"ESCRUTINIO FINAL", icon:Calculator },
+                            { id:"auditoria", label:"AUDITORÍA", icon:AlertTriangle },
+                            { id:"usuarios", label:"USUARIOS", icon:UserPlus },
+                            { id:"config", label:"AJUSTES", icon:Settings },
+                            ...(esMaster ? [{ id:"limpiar", label:"LIMPIAR DÍA D", icon:Trash2 }] : []),
+                        ].map(n => {
+                            const Icon = n.icon; const activo = activeTab === n.id;
+                            return (
+                                <button key={n.id} onClick={()=>{setActiveTab(n.id); setSidebarOpen(false);}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-black text-xs transition-colors ${activo ? (n.id==='limpiar'?'bg-orange-500 text-white':'bg-red-600 text-white shadow') : (n.id==='limpiar'?'text-orange-600 hover:bg-orange-50':'text-slate-600 hover:bg-slate-100')}`}>
+                                    <Icon size={18} className={activo ? 'text-white' : (n.id==='limpiar'?'text-orange-400':'text-slate-400')}/> {n.label}
                                 </button>
-                                
-                                <button onClick={() => {setActiveTab("auditoria"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${activeTab === 'auditoria' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                                    <AlertTriangle size={16} className={activeTab === 'auditoria' ? "text-red-500" : "text-slate-400"}/> AUDITORÍA
-                                </button>
-                                
-                                <button onClick={() => {setActiveTab("usuarios"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${activeTab === 'usuarios' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                                    <UserPlus size={16} className={activeTab === 'usuarios' ? "text-blue-500" : "text-slate-400"}/> USUARIOS
-                                </button>
-                                
-                                <button onClick={() => {setActiveTab("config"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${activeTab === 'config' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                                    <Settings size={16} className="text-slate-400"/> AJUSTES
-                                </button>
+                            );
+                        })}
+                    </nav>
+                </aside>
 
-                                {esMaster && (
-                                <button onClick={() => {setActiveTab("limpiar"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${activeTab === 'limpiar' ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-orange-50 hover:text-orange-700'}`}>
-                                    <Trash2 size={16} className={activeTab === 'limpiar' ? "text-orange-500" : "text-red-400"}/> LIMPIAR DÍA D
-                                </button>
-                                )}
+                <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto p-4 md:p-6 print:p-0">
 
-                            </div>
-                        )}
-                    </div>
-
-                </div>
-            </div>
-
-            <main className="max-w-7xl mx-auto p-4 md:p-6 mt-4 print:p-0">
                 
                 {activeTab === "usuarios" && (
                     distritoFiltroMaster === "TODOS" ? (
@@ -1386,6 +1359,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     </div>
                 )}
             </main>
+            </div>
         </div>
     );
 }
