@@ -424,7 +424,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
-            <header className="bg-slate-900 text-white p-4 shadow-xl border-b-4 border-red-600 sticky top-0 z-50 print:hidden">
+            <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-slate-900 text-white p-4 shadow-xl border-b-4 border-red-600 sticky top-0 z-50 print:hidden">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
@@ -478,7 +478,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
 
             <div className="flex">
                 {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={()=>setSidebarOpen(false)}/>}
-                <aside className={`fixed lg:sticky top-0 lg:top-[73px] left-0 h-screen lg:h-[calc(100vh-73px)] w-64 bg-white border-r border-slate-200 shadow-xl lg:shadow-none z-50 lg:z-30 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col shrink-0 print:hidden`}>
+                <aside style={{ paddingTop: 'env(safe-area-inset-top)' }} className={`fixed lg:sticky top-0 lg:top-[73px] left-0 h-screen lg:h-[calc(100vh-73px)] w-64 bg-white border-r border-slate-200 shadow-xl lg:shadow-none z-50 lg:z-30 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col shrink-0 print:hidden`}>
                     <div className="p-4 border-b flex justify-between items-center lg:hidden"><span className="font-black text-slate-800">MEN&Uacute;</span><button onClick={()=>setSidebarOpen(false)} className="p-1 text-slate-400"><X size={20}/></button></div>
                     <nav className="flex-1 overflow-y-auto p-3 space-y-1">
                         {[

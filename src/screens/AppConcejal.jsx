@@ -347,7 +347,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     return (
         <div className="bg-slate-50 min-h-screen">
-            <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-3 flex justify-between items-center shadow-lg sticky top-0 z-50">
+            <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }} className="bg-gradient-to-r from-red-700 to-red-900 text-white p-3 flex justify-between items-center shadow-lg sticky top-0 z-50">
                 <div className="flex items-center gap-2 min-w-0">
                     <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
                     <div className="w-9 h-9 rounded-full overflow-hidden bg-white/20 border-2 border-white/40 shrink-0 flex items-center justify-center">
@@ -366,7 +366,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
             <div className="flex">
                 {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={()=>setSidebarOpen(false)}/>}
-                <aside className={`fixed lg:sticky top-0 lg:top-[56px] left-0 h-screen lg:h-[calc(100vh-56px)] w-64 bg-white border-r border-slate-200 shadow-xl lg:shadow-none z-50 lg:z-30 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col shrink-0 print:hidden`}>
+                <aside style={{ paddingTop: 'env(safe-area-inset-top)' }} className={`fixed lg:sticky top-0 lg:top-[56px] left-0 h-screen lg:h-[calc(100vh-56px)] w-64 bg-white border-r border-slate-200 shadow-xl lg:shadow-none z-50 lg:z-30 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col shrink-0 print:hidden`}>
                     <div className="p-4 border-b flex justify-between items-center lg:hidden"><span className="font-black text-slate-800">MENÚ</span><button onClick={()=>setSidebarOpen(false)} className="p-1 text-slate-400"><X size={20}/></button></div>
                     <nav className="flex-1 overflow-y-auto p-3 space-y-1">
                         {navItems.map(n => {

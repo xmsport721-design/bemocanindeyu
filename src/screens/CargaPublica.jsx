@@ -46,7 +46,7 @@ export default function CargaPublica({ token }) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 shadow-lg">
+      <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 shadow-lg">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span>
           <div><h1 className="text-sm font-black uppercase leading-tight">Carga de {info.coordinador_nombre}</h1><p className="text-[10px] text-red-200 font-bold uppercase">{info.distrito}{info.zona ? ` · ${info.zona}` : ""} · {info.filas} cargados</p></div>
