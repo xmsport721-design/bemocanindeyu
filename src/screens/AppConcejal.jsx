@@ -303,6 +303,13 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
           .catch(() => alert("No se pudo guardar."));
     };
 
+    const quitarCoordinador = (c) => {
+        if (window.confirm(`¿Eliminar al coordinador ${c.nombre}? (No borra los votos ya cargados)`)) {
+            remove(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(c.nombre)}`));
+            setLinksGenerados(prev => { const n = { ...prev }; delete n[c.nombre]; return n; });
+        }
+    };
+
     const generarLinkPara = async (c) => {
         try {
             const token = await cargaCrear({ distrito: perfil.distrito, zona: c.zona, coordinador: c.nombre, telefono: c.telefono, concejalFijo: miNom, concejales: configApp.concejales || [] });
@@ -725,7 +732,10 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                                 <div className="font-black text-sm uppercase truncate">{c.nombre}</div>
                                                 <div className="text-[10px] font-bold text-slate-400 truncate">{c.cedula?`CI ${c.cedula} · `:''}{c.localidad||''} {c.zona?`· ${c.zona}`:''}{c.telefono?` · 📞 ${c.telefono}`:''}</div>
                                             </div>
-                                            <button onClick={()=>generarLinkPara(c)} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg font-black text-xs shrink-0 flex items-center gap-1"><Send size={14}/> LINK</button>
+                                            <div className="flex gap-2 shrink-0">
+                                                <button onClick={()=>generarLinkPara(c)} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg font-black text-xs flex items-center gap-1"><Send size={14}/> LINK</button>
+                                                <button onClick={()=>quitarCoordinador(c)} title="Eliminar coordinador" className="bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-lg"><Trash2 size={16}/></button>
+                                            </div>
                                         </div>
                                         {linksGenerados[c.nombre] && (
                                             <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2">
