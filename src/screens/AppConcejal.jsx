@@ -8,7 +8,7 @@ import { generarLlave } from "../lib/llaves";
 import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLote } from "../lib/padronSupabase";
 
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
-    const [tab, setTab] = useState("dashboard");
+    const [tab, setTab] = useState("registro");
     const [sidebarOpen, setSidebarOpen] = useState(false);
     // Modales del dashboard
     const [coordSel, setCoordSel] = useState(null);   // coordinador seleccionado (detalle)
@@ -288,8 +288,8 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     };
 
     const navItems = [
-        { id: "dashboard", label: "PANEL", icon: LayoutDashboard },
         { id: "registro", label: "REGISTRO", icon: CheckCircle },
+        { id: "dashboard", label: "PANEL", icon: LayoutDashboard },
         { id: "lista", label: "LISTA", icon: Users },
         { id: "auditoria", label: "AUDITORÍA", icon: AlertTriangle },
         { id: "dia_d_buscador", label: "DÍA D BUSCADOR", icon: Search },
