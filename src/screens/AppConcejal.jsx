@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle, Send } from "lucide-react";
-import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
+import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle, Send, Edit2 } from "lucide-react";
+import { concejalCoincide, normalizarNombre, imprimirCarnetFisico, enviarWhatsAppCarnet } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
 import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLote } from "../lib/padronSupabase";
@@ -55,6 +55,9 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [lim, setLim] = useState(50);
     const [fC, setFC] = useState("TODOS");
     const [fS, setFS] = useState("TODOS");
+    // Edición/eliminación de un registro en la LISTA
+    const [editVoto, setEditVoto] = useState(null);
+    const [editForm, setEditForm] = useState({ telefono: "", localidad: "", coordinador: "", semaforo: "VERDE" });
 
     // Carga masiva por coordinador (pegar/CSV de cédulas + cruzamiento con padrón)
     const [masivoTexto, setMasivoTexto] = useState("");
@@ -313,6 +316,14 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         }).then(() => { setCoordForm({ cedula: "", nombre: "", telefono: "", localidad: "", zona: "URBANA" }); })
           .catch(() => alert("No se pudo guardar."));
     };
+
+    const abrirEditar = (v) => { setEditVoto(v); setEditForm({ telefono: v.telefono || "", localidad: v.localidad || "", coordinador: v.coordinador || "", semaforo: v.semaforo || "VERDE" }); };
+    const guardarEditar = () => {
+        if (!editVoto) return;
+        update(ref(db, `votos_seguros/${editVoto.id}`), { telefono: editForm.telefono, localidad: editForm.localidad, coordinador: editForm.coordinador, semaforo: editForm.semaforo })
+            .then(() => setEditVoto(null)).catch(() => alert("No se pudo guardar."));
+    };
+    const eliminarVotoConcejal = (id) => { if (window.confirm("¿Eliminar este registro de tu lista?")) remove(ref(db, `votos_seguros/${id}`)); };
 
     const quitarCoordinador = (c) => {
         if (window.confirm(`¿Eliminar al coordinador ${c.nombre}? (No borra los votos ya cargados)`)) {
@@ -628,7 +639,14 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                             <span className="text-xs text-gray-500">M:{v.mesa} | C.I:{v.cedula} | <span className={`text-${semaforoReal === 'VERDE' ? 'green' : semaforoReal === 'AMARILLO' ? 'yellow' : 'red'}-500 text-lg leading-none`}>●</span></span>
                                         </td>
                                         <td className="p-3">{vot?<span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-1 rounded">✅ {vot.hora}</span>:'-'}</td>
-                                        <td className="p-3 text-center"><button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[normalizarNombre(v.concejal)])} className="bg-slate-800 text-white p-2 rounded-full"><Printer size={14}/></button></td>
+                                        <td className="p-3">
+                                            <div className="flex justify-center items-center gap-2">
+                                                <button onClick={()=>enviarWhatsAppCarnet(v)} title="Enviar por WhatsApp" className="text-green-600 hover:text-green-800"><Send size={15}/></button>
+                                                <button onClick={()=>imprimirCarnetFisico(v, FOTOS_LOCALES_CONCEJALES[normalizarNombre(v.concejal)])} title="Imprimir carnet" className="text-slate-700 hover:text-black"><Printer size={15}/></button>
+                                                <button onClick={()=>abrirEditar(v)} title="Editar (teléfono/localidad)" className="text-blue-500 hover:text-blue-700"><Edit2 size={15}/></button>
+                                                <button onClick={()=>eliminarVotoConcejal(v.id)} title="Eliminar registro" className="text-red-400 hover:text-red-700"><Trash2 size={15}/></button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 )})}
                         </tbody></table>{misV.length>lim && <button onClick={()=>setLim(l=>l+50)} className="w-full p-4 bg-slate-100 font-bold text-slate-600 mt-4 rounded-xl">Cargar más...</button>}
@@ -889,6 +907,24 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     const ll=generarLlave(v.distrito,v.cod_local,v.mesa,v.orden); const vd=yaVotaronGlobal[ll]; const pc=pasoPCGlobal[ll];
                                     return (<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre} {v.apellido}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.local}</div></div><div className="flex gap-1 shrink-0 items-center">{pc&&<span className="text-[10px]">📍</span>}{vd?<span className="text-[10px]">✅</span>:<span className="text-[10px] opacity-30">⏳</span>}</div></div>);
                                 })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {editVoto && (
+                <div className="fixed inset-0 bg-black/50 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={()=>setEditVoto(null)}>
+                    <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden" onClick={e=>e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-slate-50"><div className="min-w-0"><h3 className="font-black uppercase">Editar registro</h3><p className="text-[11px] font-bold text-slate-500 truncate">{editVoto.nombre} {editVoto.apellido} · CI {editVoto.cedula}</p></div><button onClick={()=>setEditVoto(null)} className="p-1 text-slate-400"><X size={22}/></button></div>
+                        <div className="p-4 space-y-3">
+                            <div><label className="text-[10px] font-black text-slate-500 uppercase">📱 Teléfono</label><input type="tel" className="w-full p-3 border-2 border-green-200 rounded-xl font-bold outline-none focus:border-green-500" value={editForm.telefono} onChange={e=>setEditForm({...editForm, telefono:e.target.value})} placeholder="Ej: 0981123456"/></div>
+                            <div><label className="text-[10px] font-black text-slate-500 uppercase">Localidad</label><input type="text" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none" value={editForm.localidad} onChange={e=>setEditForm({...editForm, localidad:e.target.value.toUpperCase()})} placeholder="Barrio / compañía"/></div>
+                            <div><label className="text-[10px] font-black text-slate-500 uppercase">Coordinador</label><select className="w-full p-3 border-2 rounded-xl font-bold outline-none" value={editForm.coordinador} onChange={e=>setEditForm({...editForm, coordinador:e.target.value})}><option value="">SIN COORDINADOR</option>{coordNombres.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                            <div><label className="text-[10px] font-black text-slate-500 uppercase">Color</label><select className={`w-full p-3 rounded-xl font-black text-white outline-none ${editForm.semaforo==='VERDE'?'bg-green-500':editForm.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={editForm.semaforo} onChange={e=>setEditForm({...editForm, semaforo:e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div>
+                            <div className="flex gap-2 pt-1">
+                                <button onClick={guardarEditar} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-black">GUARDAR</button>
+                                <button onClick={()=>setEditVoto(null)} className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-xl font-black">CANCELAR</button>
                             </div>
                         </div>
                     </div>
