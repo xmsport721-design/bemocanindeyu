@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { UserPlus, Send, CheckCircle, Loader } from "lucide-react";
+import { UserPlus, Send, CheckCircle, Loader, Search } from "lucide-react";
 import { cargaInfo, cargaAgregar, cargaEnviar } from "../lib/cargaCoordinador";
+import { buscarPadronPorCedula } from "../lib/padronSupabase";
 
 // Página PÚBLICA (sin login) a la que entra el coordinador con su link único (?carga=TOKEN)
 export default function CargaPublica({ token }) {
@@ -9,6 +10,11 @@ export default function CargaPublica({ token }) {
   const [concejalSel, setConcejalSel] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  // Búsqueda por cédula (rápida): busca en el padrón y agrega de a uno
+  const [buscarCi, setBuscarCi] = useState("");
+  const [resultado, setResultado] = useState(null); // null | "NO" | {padron}
+  const [buscando, setBuscando] = useState(false);
+  const [telProv, setTelProv] = useState("");
 
   const recargar = () => cargaInfo(token).then(setInfo).catch(() => setInfo(null));
   useEffect(() => { recargar(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -28,6 +34,25 @@ export default function CargaPublica({ token }) {
     setGuardando(true);
     try { const n = await cargaAgregar(token, filas); setTexto(""); await recargar(); alert(`✅ Agregados ${n}.`); }
     catch (e) { alert("⚠️ " + (e.message || "No se pudo agregar")); }
+    setGuardando(false);
+  };
+
+  const buscarCoord = async () => {
+    const ci = String(buscarCi).trim();
+    if (!ci) return;
+    setBuscando(true); setResultado(null);
+    const p = await buscarPadronPorCedula(ci);
+    setResultado(p || "NO");
+    setBuscando(false);
+  };
+
+  const agregarUno = async () => {
+    if (!resultado || resultado === "NO") return;
+    setGuardando(true);
+    try {
+      await cargaAgregar(token, [{ cedula: String(resultado.cedula), nombre: `${resultado.nombre} ${resultado.apellido}`.trim(), telefono: telProv, concejal: concejalSel || info?.concejal_fijo || "" }]);
+      setResultado(null); setBuscarCi(""); setTelProv(""); await recargar();
+    } catch (e) { alert("⚠️ " + (e.message || "No se pudo agregar")); }
     setGuardando(false);
   };
 
@@ -61,8 +86,26 @@ export default function CargaPublica({ token }) {
             <p className="text-sm font-bold text-slate-500">Enviaste {info.filas} personas. El equipo las va a revisar y cargar. Ya podés cerrar esta página.</p>
           </div>
         ) : (
+          <div className="space-y-4">
           <div className="bg-white p-6 rounded-3xl shadow-xl border">
-            <h2 className="font-black text-lg mb-1 flex items-center gap-2"><UserPlus className="text-emerald-600"/>Cargá tu gente</h2>
+            <h2 className="font-black text-lg mb-1 flex items-center gap-2"><Search className="text-red-600"/>Buscar por cédula</h2>
+            <p className="text-xs text-slate-500 font-bold mb-3">Buscá la cédula, confirmá el nombre y agregalo. (Más rápido y seguro.)</p>
+            <div className="flex gap-2">
+              <input type="number" placeholder="N° de cédula" className="flex-1 p-3 border-2 rounded-xl font-bold text-center outline-none focus:border-red-500" value={buscarCi} onChange={e=>setBuscarCi(e.target.value)} onKeyDown={e=>e.key==='Enter'&&buscarCoord()} />
+              <button onClick={buscarCoord} disabled={buscando} className="bg-slate-800 text-white px-5 rounded-xl font-black disabled:opacity-50">{buscando ? '...' : <Search size={18}/>}</button>
+            </div>
+            {resultado === "NO" && <div className="mt-3 p-3 bg-red-50 text-red-600 font-bold text-center rounded-xl text-sm">Cédula no encontrada en el padrón.</div>}
+            {resultado && resultado !== "NO" && (
+              <div className="mt-3 border-2 border-emerald-200 bg-emerald-50 rounded-2xl p-3">
+                <div className="font-black uppercase">{resultado.nombre} {resultado.apellido}</div>
+                <div className="text-[11px] font-bold text-slate-500 mb-2">CI {resultado.cedula} · Mesa {resultado.mesa} · {resultado.local}</div>
+                <input type="text" placeholder="Teléfono (opcional)" className="w-full p-2 border-2 rounded-lg font-bold text-sm mb-2 outline-none" value={telProv} onChange={e=>setTelProv(e.target.value)} />
+                <button onClick={agregarUno} disabled={guardando} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-black disabled:opacity-50">+ AGREGAR ESTA PERSONA</button>
+              </div>
+            )}
+          </div>
+          <div className="bg-white p-6 rounded-3xl shadow-xl border">
+            <h2 className="font-black text-lg mb-1 flex items-center gap-2"><UserPlus className="text-emerald-600"/>O pegá varias de una</h2>
             <p className="text-xs text-slate-500 font-bold mb-4">Pegá una cédula por línea. Opcional: "cédula, nombre, teléfono".</p>
             {Array.isArray(info.concejales_disponibles) && info.concejales_disponibles.length > 0 && !info.concejal_fijo && (
               <select className="w-full p-3 border-2 rounded-xl font-bold mb-3 outline-none" value={concejalSel} onChange={e=>setConcejalSel(e.target.value)}>
@@ -73,6 +116,7 @@ export default function CargaPublica({ token }) {
             <textarea rows={8} placeholder={"1234567\n7654321, JUAN PEREZ, 0981123456"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none focus:border-emerald-500 mb-3" value={texto} onChange={e=>setTexto(e.target.value)} />
             <button onClick={agregar} disabled={guardando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50 mb-2">{guardando ? "GUARDANDO..." : "AGREGAR A LA LISTA"}</button>
             <button onClick={enviar} disabled={guardando || info.filas === 0} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2"><Send size={16}/> ENVIAR {info.filas > 0 ? `(${info.filas})` : ""}</button>
+          </div>
           </div>
         )}
       </main>
