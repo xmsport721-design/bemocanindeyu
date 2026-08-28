@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle, Send } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
 import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLote } from "../lib/padronSupabase";
+import { cargaCrear, cargaListar, cargaFilasGet, cargaMarcarImportada } from "../lib/cargaCoordinador";
 
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
     const [tab, setTab] = useState("registro");
@@ -72,10 +73,18 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [nuevoCoordLocalidad, setNuevoCoordLocalidad] = useState("");
     const [coordMeta, setCoordMeta] = useState({}); // { normalizado: {nombre, telefono, zona} }
 
+    // Fase 3: link público de coordinador
+    const [linkForm, setLinkForm] = useState({ coordinador: "", telefono: "", zona: "URBANA" });
+    const [linkNuevo, setLinkNuevo] = useState("");
+    const [cargasList, setCargasList] = useState([]);
+    const [importando, setImportando] = useState("");
+
     useEffect(() => {
         const un = onValue(ref(db, `coordinadores/${perfil.distrito}`), snap => setCoordMeta(snap.val() || {}));
         return () => un();
     }, [db, perfil.distrito]);
+
+    useEffect(() => { if (tab === "carga_link") cargaListar(perfil.distrito).then(setCargasList); }, [tab, perfil.distrito]);
 
     // DEDUP: una cédula vale UNO para la meta (aunque esté cargada 2+ veces)
     const misVUnicos = useMemo(() => {
@@ -269,6 +278,42 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         r.readAsText(f);
     };
 
+    // Fase 3: generar link público, listar cargas recibidas e importar
+    const refrescarCargas = async () => { setCargasList(await cargaListar(perfil.distrito)); };
+
+    const generarLink = async () => {
+        if (!linkForm.coordinador.trim()) return alert("Poné el nombre del coordinador.");
+        try {
+            const token = await cargaCrear({ distrito: perfil.distrito, zona: linkForm.zona, coordinador: linkForm.coordinador.trim().toUpperCase(), telefono: linkForm.telefono, concejalFijo: miNom, concejales: configApp.concejales || [] });
+            setLinkNuevo(`${window.location.origin}/?carga=${token}`);
+            refrescarCargas();
+        } catch (e) { alert("No se pudo crear el link. ¿Corriste el SQL de la Fase 3 en Supabase?\n" + (e.message || "")); }
+    };
+
+    const importarCarga = async (c) => {
+        setImportando(c.token);
+        try {
+            const filas = await cargaFilasGet(c.token);
+            const encontrados = await buscarPadronPorCedulasLote(filas.map(f => f.cedula), perfil.distrito);
+            const encMap = {}; encontrados.forEach(p => { encMap[String(p.cedula)] = p; });
+            const telMap = {}; filas.forEach(f => { if (f.telefono) telMap[String(f.cedula)] = f.telefono; });
+            const yaMios = new Set(misV.map(v => String(v.cedula)));
+            const updates = {}; let n = 0;
+            filas.forEach(f => {
+                const p = encMap[String(f.cedula)];
+                if (!p || yaMios.has(String(f.cedula))) return;
+                const key = push(ref(db, 'votos_seguros')).key;
+                updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: telMap[String(f.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: (f.concejal && f.concejal !== "") ? f.concejal : miNom, coordinador: c.coordinador_nombre, semaforo: "VERDE", registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), origen: "link_coordinador" };
+                n++;
+            });
+            if (n > 0) await update(ref(db, 'votos_seguros'), updates);
+            await cargaMarcarImportada(c.token);
+            await refrescarCargas();
+            alert(`✅ Importados ${n} de ${filas.length}. (${filas.length - n} no figuran en el padrón o ya estaban cargados)`);
+        } catch (e) { alert("Error al importar: " + (e.message || "")); }
+        setImportando("");
+    };
+
     const handleRegistrarConcejal = () => {
         import('firebase/database').then(({ push, ref }) => {
             if(!form.cedula||!form.nombre)return alert("Datos incompletos");
@@ -296,6 +341,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         { id: "proyecciones", label: "PROYECCIONES", icon: BarChart3 },
         { id: "live", label: "LIVE", icon: Bell },
         { id: "dirigentes", label: "MIS DIRIGENTES", icon: UserPlus },
+        { id: "carga_link", label: "LINK COORDINADOR", icon: Send },
     ];
     const irA = (id) => { setTab(id); setSidebarOpen(false); };
 
@@ -642,6 +688,52 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         </div>
                     </div>
                 )}
+                {tab === "carga_link" && (
+                    <div className="animate-fade-in max-w-2xl mx-auto space-y-5">
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h2 className="font-black text-lg text-slate-800 flex items-center gap-2 mb-1"><Send className="text-emerald-600" size={20}/> LINK PARA COORDINADOR</h2>
+                            <p className="text-xs text-slate-500 font-bold mb-4">Generá un link único. Tu coordinador entra SIN usuario ni clave, carga sus cédulas y las envía. Después vos las revisás y cargás.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                                <input type="text" placeholder="NOMBRE COORDINADOR" className="p-3 border-2 rounded-xl font-bold uppercase outline-none" value={linkForm.coordinador} onChange={e=>setLinkForm({...linkForm, coordinador:e.target.value.toUpperCase()})}/>
+                                <input type="text" placeholder="TELÉFONO" className="p-3 border-2 rounded-xl font-bold outline-none" value={linkForm.telefono} onChange={e=>setLinkForm({...linkForm, telefono:e.target.value})}/>
+                                <select className="p-3 border-2 rounded-xl font-bold outline-none" value={linkForm.zona} onChange={e=>setLinkForm({...linkForm, zona:e.target.value})}><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
+                            </div>
+                            <button onClick={generarLink} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors">GENERAR LINK</button>
+                            {linkNuevo && (
+                                <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
+                                    <div className="text-[11px] font-black text-emerald-700 mb-1">✅ Link listo — compartilo:</div>
+                                    <div className="text-xs font-mono break-all bg-white border rounded p-2 mb-2">{linkNuevo}</div>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>{navigator.clipboard?.writeText(linkNuevo); alert('Copiado');}} className="flex-1 bg-slate-800 text-white py-2 rounded-lg font-black text-xs">COPIAR</button>
+                                        <a href={`https://wa.me/?text=${encodeURIComponent('Cargá tu gente acá: '+linkNuevo)}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-600 text-white py-2 rounded-lg font-black text-xs text-center">WHATSAPP</a>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <div className="flex items-center justify-between mb-3"><h3 className="font-black text-sm uppercase text-slate-500">Cargas recibidas</h3><button onClick={refrescarCargas} className="text-slate-400 hover:text-slate-700"><RefreshCw size={16}/></button></div>
+                            <div className="space-y-2">
+                                {cargasList.map(c => (
+                                    <div key={c.token} className="border rounded-2xl p-3 flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="font-black text-sm uppercase truncate">{c.coordinador_nombre}</div>
+                                            <div className="text-[10px] font-bold text-slate-400">{c.filas} personas · {c.estado}{c.zona?` · ${c.zona}`:''}</div>
+                                        </div>
+                                        {c.estado === "enviado" ? (
+                                            <button onClick={()=>importarCarga(c)} disabled={importando===c.token} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-black text-xs shrink-0 disabled:opacity-50">{importando===c.token ? "IMPORTANDO..." : "IMPORTAR"}</button>
+                                        ) : c.estado === "importado" ? (
+                                            <span className="text-[11px] font-black text-green-600 shrink-0">✅ IMPORTADO</span>
+                                        ) : (
+                                            <span className="text-[11px] font-black text-slate-400 shrink-0">⏳ CARGANDO</span>
+                                        )}
+                                    </div>
+                                ))}
+                                {cargasList.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">No hay cargas todavía.</div>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {tab === "auditoria" && (
                     <div className="animate-fade-in max-w-3xl mx-auto">
                         <div className="bg-white p-5 rounded-3xl shadow border">

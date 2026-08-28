@@ -11,6 +11,10 @@ const AppVeedor = lazy(() => import("./screens/AppVeedor"));
 const AppDirigente = lazy(() => import("./screens/AppDirigente"));
 const AppConcejal = lazy(() => import("./screens/AppConcejal"));
 const AppSuperAdmin = lazy(() => import("./screens/superadmin/AppSuperAdmin"));
+const CargaPublica = lazy(() => import("./screens/CargaPublica"));
+
+// Link público del coordinador: ?carga=TOKEN (sin login)
+const CARGA_TOKEN = new URLSearchParams(window.location.search).get("carga");
 
 const CargandoPantalla = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div></div>
@@ -38,6 +42,7 @@ export default function BemoSystem() {
   const [usuariosOnline, setUsuariosOnline] = useState({});
 
   useEffect(() => {
+    if (CARGA_TOKEN) { setCargando(false); return; } // link público: no tocar auth/RTDB
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUsuarioActivo(user);
@@ -87,6 +92,8 @@ export default function BemoSystem() {
       const unsubOnline = onValue(ref(db, 'estado_online'), (snap) => setUsuariosOnline(snap.val() || {}));
       return () => unsubOnline();
   }, [usuarioActivo, perfil]);
+
+  if (CARGA_TOKEN) return <Suspense fallback={<CargandoPantalla/>}><CargaPublica token={CARGA_TOKEN} /></Suspense>;
 
   if (cargando || (usuarioActivo && !perfil)) {
       return (
