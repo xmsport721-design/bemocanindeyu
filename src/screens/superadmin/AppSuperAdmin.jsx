@@ -431,7 +431,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                         <div className="bg-red-700 p-2 rounded-lg font-black text-white">BEMO</div>
                         {distritoFiltroMaster !== "TODOS" && (
                             <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700 border-2 border-red-500 shrink-0 flex items-center justify-center">
-                                {(fotosConcejales[configApp.intendente] || fotosConcejales[normalizarNombre(configApp.intendente||"")]) ? <img src={fotosConcejales[configApp.intendente] || fotosConcejales[normalizarNombre(configApp.intendente||"")]} alt="intendente" className="w-full h-full object-cover"/> : <IdCard size={22} className="text-red-300"/>}
+                                {(() => { const fi = fotosConcejales[configApp.intendente] || fotosConcejales[normalizarNombre(configApp.intendente||"")] || FOTOS_LOCALES_CONCEJALES[normalizarNombre(configApp.intendente||"")]; return fi ? <img src={fi} alt="intendente" onError={e=>{e.currentTarget.style.display='none';}} className="w-full h-full object-cover"/> : <IdCard size={22} className="text-red-300"/>; })()}
                             </div>
                         )}
                         <div>
@@ -983,7 +983,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                                         <div key={c} onClick={() => {setConcejalEnDetalle(c); setFDetCoord("TODOS"); setFDetVoto("TODOS"); setFDetPC("TODOS"); setLimiteDetalleConcejal(100);}} className="cursor-pointer hover:scale-105 transition-transform duration-300 bg-gradient-to-br from-slate-900 to-black rounded-2xl p-5 text-white shadow-xl relative overflow-hidden group border border-slate-700">
                                                             <div className="flex items-center gap-4 relative z-10">
                                                                 <div className="relative w-16 h-16 rounded-full border-2 border-red-500 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                                                                    {fotoFinal ? <img src={fotoFinal} alt={c} className="w-full h-full object-cover"/> : <IdCard className="text-red-300" size={32}/>}
+                                                                    {fotoFinal ? <img src={fotoFinal} alt={c} onError={e=>{e.currentTarget.style.display='none';}} className="w-full h-full object-cover"/> : <IdCard className="text-red-300" size={32}/>}
                                                                 </div>
                                                                 <div className="flex-1">
                                                                     <div className="font-black text-sm truncate uppercase tracking-wider text-red-100" title={nombreLimpio}>{nombreLimpio}</div>

@@ -21,4 +21,19 @@ export const FOTOS_LOCALES_CONCEJALES = {
   "MARCELINOGONZALEZ": "/fotos/7-marcelino_gonzález.jpg",
   "ISMAELFERNANDEZ": "/fotos/8-ismael_fernández.jpg",
   "LUZMABELR": "/fotos/9-luz_mabel_r.jpg",
+
+  // --- HORQUETA (intendente + 12 concejales) ---
+  "SERGIOCARRILLO": "/fotos/horqueta/intendente-sergio_carrillo.jpg",
+  "RAQUELPAREDES": "/fotos/horqueta/1-raquel_paredes.jpg",
+  "JOSEVILLALBA": "/fotos/horqueta/2-jose_villalba.jpg",
+  "JAVIERGAYOSO": "/fotos/horqueta/3-javier_gayoso.jpg",
+  "CRISTINOVILLALBA": "/fotos/horqueta/4-cristino_villalba.jpg",
+  "FARIDGOSSEN": "/fotos/horqueta/5-farid_gossen.jpg",
+  "LUISAGUERO": "/fotos/horqueta/6-luis_aguero.jpg",
+  "RICARDOIBANEZ": "/fotos/horqueta/7-ricardo_ibanez.jpg",
+  "NENEFLORENTIN": "/fotos/horqueta/8-nene_florentin.jpg",
+  "CECILIOFERREIRA": "/fotos/horqueta/9-cecilio_ferreira.jpg",
+  "ALBERTHGAUTO": "/fotos/horqueta/10-alberth_gauto.jpg",
+  "OSCARMEDINA": "/fotos/horqueta/11-oscar_medina.jpg",
+  "NELSONRUIZ": "/fotos/horqueta/12-nelson_ruiz.jpg",
 };

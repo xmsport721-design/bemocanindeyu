@@ -367,7 +367,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                 <div className="flex items-center gap-2 min-w-0">
                     <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
                     <div className="w-9 h-9 rounded-full overflow-hidden bg-white/20 border-2 border-white/40 shrink-0 flex items-center justify-center">
-                        {miFoto ? <img src={miFoto} alt={miNom} className="w-full h-full object-cover"/> : <UserSquare2 size={20} className="text-white/70"/>}
+                        {miFoto ? <img src={miFoto} alt={miNom} onError={e=>{e.currentTarget.style.display='none';}} className="w-full h-full object-cover"/> : <UserSquare2 size={20} className="text-white/70"/>}
                     </div>
                     <div className="min-w-0">
                         <h1 className="text-xs font-bold uppercase leading-tight truncate">{miNom.includes('-')?miNom.split('-')[1]:miNom}</h1>
