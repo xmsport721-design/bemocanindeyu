@@ -20,7 +20,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     
     // NUEVO: Estado para el Lápiz de Edición de Voto
     const [editandoVotoId, setEditandoVotoId] = useState(null);
-    const [formEdicion, setFormEdicion] = useState({ concejal: "", coordinador: "", semaforo: "" });
+    const [formEdicion, setFormEdicion] = useState({ concejal: "", coordinador: "", semaforo: "", telefono: "" });
     const [soloDuplicados, setSoloDuplicados] = useState(false);
 
     const dataConfigBruta = distritoFiltroMaster === "TODOS" ? {} : (configuracionDepartamental[distritoFiltroMaster] || {});
@@ -190,7 +190,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
             update(ref(db, `votos_seguros/${editandoVotoId}`), {
                 concejal: formEdicion.concejal,
                 coordinador: formEdicion.coordinador.toUpperCase(),
-                semaforo: formEdicion.semaforo
+                semaforo: formEdicion.semaforo,
+                telefono: formEdicion.telefono
             }).then(() => {
                 alert("✅ Voto actualizado correctamente.");
                 setEditandoVotoId(null);
@@ -422,6 +423,11 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     <div className="flex items-center gap-3">
                         <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
                         <div className="bg-red-700 p-2 rounded-lg font-black text-white">BEMO</div>
+                        {distritoFiltroMaster !== "TODOS" && (
+                            <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700 border-2 border-red-500 shrink-0 flex items-center justify-center">
+                                {(fotosConcejales[configApp.intendente] || fotosConcejales[normalizarNombre(configApp.intendente||"")]) ? <img src={fotosConcejales[configApp.intendente] || fotosConcejales[normalizarNombre(configApp.intendente||"")]} alt="intendente" className="w-full h-full object-cover"/> : <IdCard size={22} className="text-red-300"/>}
+                            </div>
+                        )}
                         <div>
                             {distritoFiltroMaster === "TODOS" ? (
                                 <h1 className="text-lg font-bold leading-none text-blue-300">COMANDO DEPARTAMENTAL</h1>
@@ -689,7 +695,8 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                                 setFormEdicion({
                                                     concejal: v.concejal || "SIN ASIGNAR",
                                                     coordinador: v.coordinador || "",
-                                                    semaforo: v.semaforo || "VERDE"
+                                                    semaforo: v.semaforo || "VERDE",
+                                                    telefono: v.telefono || ""
                                                 });
                                             }} className="text-blue-500 hover:text-blue-700 ml-2 border-l pl-2" title="Editar Asignación de Voto">
                                                 <Edit2 size={16}/>
@@ -729,6 +736,10 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                         <div>
                                             <label className="text-[10px] font-bold text-gray-500 block mb-1">COORDINADOR</label>
                                             <input type="text" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none" value={formEdicion.coordinador} onChange={e=>setFormEdicion({...formEdicion, coordinador: e.target.value})} placeholder="Ej: JUAN PEREZ"/>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 block mb-1">📱 TELÉFONO (para WhatsApp)</label>
+                                            <input type="tel" className="w-full p-3 border-2 border-green-200 rounded-xl font-bold outline-none focus:border-green-500" value={formEdicion.telefono} onChange={e=>setFormEdicion({...formEdicion, telefono: e.target.value})} placeholder="Ej: 0981123456"/>
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold text-gray-500 block mb-1">COLOR (ESTADO)</label>

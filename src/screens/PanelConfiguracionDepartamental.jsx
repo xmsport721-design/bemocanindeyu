@@ -42,7 +42,15 @@ export default function PanelConfiguracionDepartamental({ perfil, configuracionD
             <h2 className="text-2xl font-black border-b pb-4"><Settings className="inline mr-2 text-red-600"/>AJUSTES: {distritoGlobal}</h2>
             {esMaster && <select className="w-full p-4 border-2 rounded-xl font-black text-lg" value={distritoGlobal} onChange={e=>setDistritoGlobal(e.target.value)}>{DISTRITOS_CONCEPCION.map(d=><option key={d}>{d}</option>)}</select>}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-red-50 p-6 rounded-2xl">
-                <div className="col-span-full md:col-span-2"><label className="text-xs font-bold text-red-700">INTENDENTE</label><input className="w-full p-3 border rounded font-black uppercase" value={tInt} onChange={e=>setTInt(e.target.value)}/></div>
+                <div className="col-span-full md:col-span-2"><label className="text-xs font-bold text-red-700">INTENDENTE</label>
+                    <div className="flex gap-2 items-center">
+                        <input className="flex-1 p-3 border rounded font-black uppercase" value={tInt} onChange={e=>setTInt(e.target.value)}/>
+                        <label className="cursor-pointer bg-emerald-100 text-emerald-700 p-3 rounded-lg hover:bg-emerald-200 transition-colors shrink-0" title="Subir foto del intendente">
+                            {subiendo===tInt ? <RefreshCw size={16} className="animate-spin"/> : <Camera size={16}/>}
+                            <input type="file" accept="image/*" className="hidden" onChange={e=> tInt ? subirFoto(e, tInt) : alert('Escribí primero el nombre del intendente.')}/>
+                        </label>
+                    </div>
+                </div>
                 <div className="col-span-1"><label className="text-xs font-bold text-red-700">LISTA</label><input className="w-full p-3 border rounded font-black" value={tLis} onChange={e=>setTList(e.target.value)}/></div>
                 <div className="col-span-1"><label className="text-xs font-bold text-red-700">META INTENDENTE</label><input type="number" className="w-full p-3 border rounded font-black border-red-400" value={tMetInt} onChange={e=>setTMetInt(e.target.value)}/></div>
                 <div className="col-span-full md:col-span-2"><label className="text-xs font-bold text-red-700">META INDIVIDUAL CONCEJAL</label><input type="number" className="w-full p-3 border rounded font-black" value={tMet} onChange={e=>setTMeta(e.target.value)}/></div>

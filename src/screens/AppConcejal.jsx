@@ -20,6 +20,8 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [bNom, setBNom] = useState("");
     const [resNom, setResNom] = useState([]);
     const miNom = perfil.nombre_oficial||"";
+    // Foto de perfil del concejal: subida (Firebase) o hardcodeada; si no hay, avatar por defecto
+    const miFoto = (fotosConcejales && (fotosConcejales[miNom] || fotosConcejales[normalizarNombre(miNom)])) || FOTOS_LOCALES_CONCEJALES[normalizarNombre(miNom)] || null;
 
     const [form, setForm] = useState({ cedula:"", nombre:"", apellido:"", telefono:"", distrito:perfil.distrito, cod_local:"", local:"", mesa:"", orden:"", concejal: miNom, coordinador:"", semaforo:"VERDE" });
 
@@ -284,10 +286,12 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
             <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-3 flex justify-between items-center shadow-lg sticky top-0 z-50">
                 <div className="flex items-center gap-2 min-w-0">
                     <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
-                    <span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span>
+                    <div className="w-9 h-9 rounded-full overflow-hidden bg-white/20 border-2 border-white/40 shrink-0 flex items-center justify-center">
+                        {miFoto ? <img src={miFoto} alt={miNom} className="w-full h-full object-cover"/> : <UserSquare2 size={20} className="text-white/70"/>}
+                    </div>
                     <div className="min-w-0">
-                        <h1 className="text-xs font-bold uppercase leading-tight truncate">{configApp.intendente||"S/D"}</h1>
-                        <p className="text-[9px] text-red-200 font-bold uppercase truncate">{miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito})</p>
+                        <h1 className="text-xs font-bold uppercase leading-tight truncate">{miNom.includes('-')?miNom.split('-')[1]:miNom}</h1>
+                        <p className="text-[9px] text-red-200 font-bold uppercase truncate">{configApp.intendente||"S/D"} · {perfil.distrito}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
