@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, ChevronDown, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES } from "../constants";
 import { generarLlave } from "../lib/llaves";
@@ -9,7 +9,11 @@ import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLot
 
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
     const [tab, setTab] = useState("dashboard");
-    const [menuAbierto, setMenuAbierto] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    // Modales del dashboard
+    const [coordSel, setCoordSel] = useState(null);   // coordinador seleccionado (detalle)
+    const [localSel, setLocalSel] = useState(null);    // local seleccionado (quiénes votan ahí)
+    const [verPasoPCTodo, setVerPasoPCTodo] = useState(false);
     // Meta de votos del concejal: se define por distrito en Ajustes del panel adm local
     const META_URNAS = Number(configApp?.meta_concejales) || 1200;
 
@@ -155,6 +159,12 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         else { alert("Cédula no encontrada."); }
     };
 
+    // Refrescar: limpia el formulario para una nueva búsqueda (mantiene coordinador fijo)
+    const refrescarBusqueda = () => {
+        setForm(f => ({ ...f, cedula:"", nombre:"", apellido:"", local:"", mesa:"", orden:"", coordinador: coordFijo || (mNC ? f.coordinador : "") }));
+        setResNom([]); setBNom("");
+    };
+
     const buscarDiaD = async () => {
         const p = await buscarPadronPorCedula(bDiaD);
         if (p) setResDiaD({ ...p, v: yaVotaronGlobal[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)], pc: pasoPCGlobal[generarLlave(p.distrito, p.cod_local, p.mesa, p.orden)] });
@@ -258,49 +268,55 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         });
     };
 
+    const navItems = [
+        { id: "dashboard", label: "PANEL", icon: LayoutDashboard },
+        { id: "registro", label: "REGISTRO", icon: CheckCircle },
+        { id: "lista", label: "LISTA", icon: Users },
+        { id: "dia_d_buscador", label: "DÍA D BUSCADOR", icon: Search },
+        { id: "proyecciones", label: "PROYECCIONES", icon: BarChart3 },
+        { id: "live", label: "LIVE", icon: Bell },
+        { id: "dirigentes", label: "MIS DIRIGENTES", icon: UserPlus },
+    ];
+    const irA = (id) => { setTab(id); setSidebarOpen(false); };
+
     return (
-        <div className="bg-slate-50 min-h-screen pb-20">
-            <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
-                <div className="flex items-center gap-3">
+        <div className="bg-slate-50 min-h-screen">
+            <header className="bg-gradient-to-r from-red-700 to-red-900 text-white p-3 flex justify-between items-center shadow-lg sticky top-0 z-50">
+                <div className="flex items-center gap-2 min-w-0">
+                    <button onClick={()=>setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 rounded-lg hover:bg-white/10"><Menu size={22}/></button>
                     <span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span>
-                    <div>
-                        <h1 className="text-sm font-bold uppercase">{configApp.intendente||"S/D"}</h1>
-                        <p className="text-[10px] text-red-200 font-bold uppercase">CANDIDATO: {miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito}) <span className="bg-white/20 px-1 rounded ml-1">v2</span></p>
+                    <div className="min-w-0">
+                        <h1 className="text-xs font-bold uppercase leading-tight truncate">{configApp.intendente||"S/D"}</h1>
+                        <p className="text-[9px] text-red-200 font-bold uppercase truncate">{miNom.includes('-')?miNom.split('-')[1]:miNom} ({perfil.distrito})</p>
                     </div>
                 </div>
-                <button onClick={()=>signOut(auth)} className="bg-red-950 p-2 rounded-full"><LogOut size={16}/></button>
+                <div className="flex items-center gap-2 shrink-0">
+                    <span className="hidden sm:inline text-[10px] font-black bg-white/15 px-2 py-1 rounded-full">TOT {misV.length} · 🟢 {misV.filter(v=>v.semaforo==='VERDE' && !cedulasDuplicadas.has(v.cedula)).length}</span>
+                    <button onClick={()=>signOut(auth)} className="bg-red-950 p-2 rounded-full"><LogOut size={16}/></button>
+                </div>
             </header>
 
-            <div className="bg-white px-4 py-2 flex justify-center gap-4 text-xs font-black border-b shadow-sm relative z-40">
-                <span className="text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-300">TOT: {misV.length}</span>
-                <span className="text-green-700 bg-green-50 px-3 py-1 rounded-full border border-green-200">🟢 {misV.filter(v=>v.semaforo==='VERDE' && !cedulasDuplicadas.has(v.cedula)).length}</span>
-            </div>
-
-            <div className="bg-white flex border-b shadow-sm sticky top-[68px] z-50 print:hidden px-2 items-center justify-center w-full">
-                <div className="flex items-center max-w-full pt-2 pb-2">
-                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-2">
-                        <button onClick={() => {setTab("dashboard"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'dashboard' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><LayoutDashboard size={16}/> PANEL</button>
-                        <button onClick={() => {setTab("registro"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'registro' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><CheckCircle size={16}/> REGISTRO</button>
-                        <button onClick={() => {setTab("lista"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'lista' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={16}/> LISTA</button>
-                        <button onClick={() => {setTab("dia_d_buscador"); setMenuAbierto(false);}} className={`p-2 px-3 font-black text-[11px] flex gap-2 items-center rounded-lg transition-colors shrink-0 ${tab === 'dia_d_buscador' ? 'text-red-600 bg-red-50' : 'text-slate-600 hover:bg-slate-100'}`}><Search size={16}/> DÍA D BUSCADOR</button>
+            <div className="flex">
+                {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={()=>setSidebarOpen(false)}/>}
+                <aside className={`fixed lg:sticky top-0 lg:top-[56px] left-0 h-screen lg:h-[calc(100vh-56px)] w-64 bg-white border-r border-slate-200 shadow-xl lg:shadow-none z-50 lg:z-30 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col shrink-0 print:hidden`}>
+                    <div className="p-4 border-b flex justify-between items-center lg:hidden"><span className="font-black text-slate-800">MENÚ</span><button onClick={()=>setSidebarOpen(false)} className="p-1 text-slate-400"><X size={20}/></button></div>
+                    <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+                        {navItems.map(n => {
+                            const Icon = n.icon; const activo = tab === n.id;
+                            return (
+                                <button key={n.id} onClick={()=>irA(n.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-black text-xs transition-colors ${activo ? 'bg-red-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'}`}>
+                                    <Icon size={18} className={activo ? 'text-white' : 'text-slate-400'}/> {n.label}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                    <div className="p-4 border-t bg-slate-50">
+                        <div className="flex justify-between text-[10px] font-black"><span className="text-slate-500">TOTAL</span><span className="text-slate-800">{misV.length}</span></div>
+                        <div className="flex justify-between text-[10px] font-black mt-1"><span className="text-green-600">🟢 VERDES</span><span className="text-green-700">{misV.filter(v=>v.semaforo==='VERDE' && !cedulasDuplicadas.has(v.cedula)).length}</span></div>
                     </div>
+                </aside>
 
-                    <div className="relative shrink-0 border-l border-slate-200 pl-2">
-                        <button onClick={() => setMenuAbierto(!menuAbierto)} className={`p-2 px-3 font-black text-[11px] flex gap-1 items-center rounded-lg transition-colors ${menuAbierto ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-100'}`}>
-                            MÁS OPCIONES <ChevronDown size={14} className={`transition-transform duration-200 ${menuAbierto ? 'rotate-180' : ''}`}/>
-                        </button>
-                        {menuAbierto && (
-                            <div className="absolute right-0 top-full mt-2 w-52 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.2)] rounded-xl z-[100] overflow-hidden flex flex-col border border-slate-200 animate-fade-in py-1">
-                                <button onClick={() => {setTab("proyecciones"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${tab === 'proyecciones' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'}`}><BarChart3 size={16} className={tab === 'proyecciones' ? "text-red-500" : "text-slate-400"}/> PROYECCIONES</button>
-                                <button onClick={() => {setTab("live"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 ${tab === 'live' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'}`}><Bell size={16} className={tab === 'live' ? "text-red-500" : "text-slate-400"}/> LIVE</button>
-                                <button onClick={() => {setTab("dirigentes"); setMenuAbierto(false);}} className={`px-4 py-3 text-left font-black text-xs transition-colors flex items-center gap-3 border-t border-slate-100 ${tab === 'dirigentes' ? 'bg-red-50 text-red-600' : 'text-slate-600 hover:bg-slate-50'}`}><UserPlus size={16} className={tab === 'dirigentes' ? "text-red-500" : "text-slate-400"}/> MIS DIRIGENTES</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <main className="max-w-5xl mx-auto p-4 md:p-6">
+                <main className="flex-1 min-w-0 p-4 md:p-6 max-w-5xl w-full mx-auto">
                 {tab === "dashboard" && (
                     <div className="space-y-5 animate-fade-in">
                         {/* ESTADO DE URNAS (META) */}
@@ -319,7 +335,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         <div className="bg-white p-5 rounded-3xl shadow border">
                             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                                 <div className="flex items-center gap-2"><Monitor size={20} className="text-blue-500"/><h2 className="font-black text-lg text-slate-800 uppercase">Paso por PC</h2></div>
-                                <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-blue-600 leading-none">{pasoPC.count}</span><span className="text-xs font-black text-slate-400">de {urnas.cargados} cargados · {pasoPC.pct}%</span></div>
+                                <div className="flex items-center gap-2"><div className="flex items-baseline gap-2"><span className="text-3xl font-black text-blue-600 leading-none">{pasoPC.count}</span><span className="text-xs font-black text-slate-400">de {urnas.cargados} · {pasoPC.pct}%</span></div><button onClick={()=>setVerPasoPCTodo(true)} className="text-[11px] font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">VER TODOS</button></div>
                             </div>
                             <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-4"><div className="bg-blue-500 h-3 rounded-full transition-all duration-500" style={{width: `${pasoPC.pct}%`}}></div></div>
                             <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
@@ -347,7 +363,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     {rankingCoord.slice(0,10).map((c, i) => {
                                         const meta = coordMeta[normalizarNombre(c.coordinador)] || {};
                                         return (
-                                        <div key={c.coordinador} className="bg-slate-50 border rounded-2xl p-3">
+                                        <div key={c.coordinador} onClick={()=>setCoordSel(c)} className="bg-slate-50 border rounded-2xl p-3 cursor-pointer hover:bg-slate-100 transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${i===0?'bg-amber-400 text-white':i===1?'bg-slate-300 text-slate-700':i===2?'bg-orange-300 text-white':'bg-slate-200 text-slate-600'}`}>{i+1}</div>
                                                 <div className="flex-1 min-w-0">
@@ -355,6 +371,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                                     <div className="text-[10px] font-bold text-slate-400 flex gap-2 items-center flex-wrap">{meta.zona && <span className={`px-1.5 rounded ${meta.zona==='RURAL'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700'}`}>{meta.zona==='RURAL'?'🌾 RURAL':'🏙️ URBANA'}</span>}{meta.telefono && <span>📞 {meta.telefono}</span>}<span className="text-green-600">✅ {c.votaron} votaron</span></div>
                                                 </div>
                                                 <div className="text-right shrink-0"><div className="text-2xl font-black text-red-700 leading-none">{c.total}</div><div className="text-[8px] font-black uppercase text-slate-400">cargas</div></div>
+                                                <ChevronRight size={18} className="text-slate-300 shrink-0"/>
                                             </div>
                                             <div className="flex flex-wrap gap-1 mt-2 pl-11">
                                                 {c.localesTop.slice(0,4).map(l => (
@@ -375,7 +392,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     {porLocal.map(l => {
                                         const max = porLocal[0]?.total || 1;
                                         return (
-                                        <div key={l.local} className="border rounded-xl p-3">
+                                        <div key={l.local} onClick={()=>setLocalSel(l.local)} className="border rounded-xl p-3 cursor-pointer hover:bg-slate-50 transition-colors">
                                             <div className="flex justify-between items-center gap-2 mb-1"><span className="font-black text-xs uppercase text-slate-700 truncate">{l.local}</span><span className="font-black text-red-700 shrink-0">{l.total}</span></div>
                                             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div className="bg-red-500 h-2 rounded-full" style={{width: `${Math.round((l.total/max)*100)}%`}}></div></div>
                                         </div>
@@ -393,13 +410,15 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         <h2 className="font-black text-xl mb-6 text-slate-800 flex items-center gap-2"><UserSquare2/> REGISTRO DE VOTOS ({perfil.distrito})</h2>
 
                         <div className="bg-slate-50 border p-4 rounded-xl mb-6">
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">1. BUSCAR POR NOMBRE / APELLIDO (Opcional si no tienes C.I)</label>
-                            <div className="flex gap-2">
-                                <input type="text" placeholder="Escribe Nombre o Apellido..." className="flex-1 p-3 border-2 rounded-xl font-bold uppercase outline-none focus:border-red-500" value={bNom} onChange={e => setBNom(e.target.value)} onKeyDown={e => e.key === 'Enter' && buscarPorNombreConcejal()} />
-                                <button onClick={buscarPorNombreConcejal} className="bg-slate-300 hover:bg-slate-400 text-slate-800 px-6 rounded-xl font-bold transition-colors"><Search size={18}/></button>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block text-center">1. BUSCAR POR NOMBRE / APELLIDO (Opcional si no tenés C.I)</label>
+                            <div className="flex gap-2 max-w-md mx-auto">
+                                <div className="relative flex-1">
+                                    <input type="text" placeholder="Nombre o Apellido..." className="w-full p-3 pr-11 border-2 rounded-xl font-bold uppercase outline-none focus:border-red-500 text-center" value={bNom} onChange={e => setBNom(e.target.value)} onKeyDown={e => e.key === 'Enter' && buscarPorNombreConcejal()} />
+                                    <button onClick={buscarPorNombreConcejal} className="absolute right-1 top-1/2 -translate-y-1/2 bg-slate-700 hover:bg-slate-800 text-white p-2 rounded-lg transition-colors"><Search size={16}/></button>
+                                </div>
                             </div>
                             {resNom.length > 0 && (
-                                <div className="mt-2 bg-white border border-slate-200 shadow-lg rounded-xl max-h-48 overflow-y-auto">
+                                <div className="mt-2 bg-white border border-slate-200 shadow-lg rounded-xl max-h-48 overflow-y-auto max-w-md mx-auto">
                                     {resNom.map(r => (
                                         <div key={r.ci} onClick={() => {setForm({...form, cedula: r.ci, nombre: r.nombre, apellido: r.apellido, cod_local: r.cod_local, local: r.local, mesa: r.mesa, orden: r.orden, distrito: r.distrito}); setResNom([]); setBNom("");}} className="p-3 hover:bg-red-50 cursor-pointer border-b last:border-b-0 text-sm flex justify-between items-center transition-colors">
                                             <div><span className="font-black">{r.nombre} {r.apellido}</span><br/><span className="text-xs text-gray-500 font-bold">C.I: {r.ci}</span></div>
@@ -410,8 +429,14 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                             )}
                         </div>
 
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">2. CARGA CON CÉDULA DE IDENTIDAD</label>
-                        <div className="flex gap-2 mb-6"><input type="number" placeholder="N° DE CÉDULA" className="flex-1 p-4 border-2 rounded-xl text-xl font-bold outline-none focus:border-red-500" value={form.cedula} onChange={e => setForm({...form, cedula: e.target.value})} /><button onClick={buscarCedulaConcejal} className="bg-slate-800 text-white px-6 rounded-xl font-bold"><Search /></button></div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block text-center">2. CARGA CON CÉDULA</label>
+                        <div className="flex gap-2 mb-6 max-w-sm mx-auto">
+                            <div className="relative flex-1">
+                                <input type="number" placeholder="N° DE CÉDULA" className="w-full p-3 pr-11 border-2 rounded-xl text-lg font-bold outline-none focus:border-red-500 text-center" value={form.cedula} onChange={e => setForm({...form, cedula: e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarCedulaConcejal()} />
+                                <button onClick={buscarCedulaConcejal} className="absolute right-1 top-1/2 -translate-y-1/2 bg-slate-800 hover:bg-slate-900 text-white p-2 rounded-lg transition-colors"><Search size={16}/></button>
+                            </div>
+                            <button onClick={refrescarBusqueda} title="Nueva búsqueda" className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 rounded-xl font-bold transition-colors"><RefreshCw size={18}/></button>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" readOnly placeholder="NOMBRES" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.nombre} /><input type="text" readOnly placeholder="APELLIDOS" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.apellido} /></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><input type="text" placeholder="TELÉFONO" className="p-3 border-2 border-blue-200 rounded-lg font-bold outline-none" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} /><input type="text" readOnly placeholder="DISTRITO" className="p-3 border rounded-lg bg-gray-50 font-bold" value={form.distrito} /></div>
                         <div className="grid grid-cols-3 gap-2 mb-4"><input type="text" readOnly className="p-3 border bg-gray-50 text-xs col-span-3 md:col-span-1" value={form.local} placeholder="LOCAL" /><input type="text" readOnly className="p-3 border bg-gray-50 font-bold" value={form.mesa ? `MESA ${form.mesa}` : "MESA"} /><input type="text" readOnly className="p-3 border-2 border-red-100 font-black text-red-600 bg-red-50" value={form.orden ? `ORDEN ${form.orden}` : "ORDEN"} /></div>
@@ -593,7 +618,111 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         </div>
                     </div>
                 )}
-            </main>
+                {tab === "proyecciones" && (() => {
+                    const verdes = misV.filter(v=>v.semaforo==='VERDE' && !cedulasDuplicadas.has(v.cedula)).length;
+                    const amar = misV.filter(v=>v.semaforo==='AMARILLO' && !cedulasDuplicadas.has(v.cedula)).length;
+                    const rojos = misV.length - verdes - amar;
+                    const t = misV.length || 1;
+                    return (
+                        <div className="space-y-5 animate-fade-in">
+                            <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
+                                <div className="flex items-center gap-2 mb-4"><BarChart3 size={20} className="text-red-500"/><h2 className="font-black text-lg uppercase">Proyección hacia la meta</h2></div>
+                                <div className="flex items-end gap-3 mb-2"><span className="text-5xl font-black text-green-400 leading-none">{urnas.votaron}</span><span className="text-slate-400 font-black mb-1">/ {META_URNAS} votos</span></div>
+                                <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden mb-1"><div className="bg-green-500 h-4 transition-all duration-500" style={{width:`${urnas.pct}%`}}></div></div>
+                                <div className="text-right text-xs font-black text-green-400">{urnas.pct}% · faltan {urnas.falta}</div>
+                            </div>
+                            <div className="bg-white p-5 rounded-3xl shadow border">
+                                <h3 className="font-black text-sm uppercase text-slate-500 mb-4">Semáforo de tus cargas ({misV.length})</h3>
+                                <div className="space-y-3">
+                                    {[['🟢 Verdes',verdes,'bg-green-500'],['🟡 Amarillos',amar,'bg-yellow-500'],['🔴 Rojos / duplicados',rojos,'bg-red-500']].map(([lbl,n,c])=>(
+                                        <div key={lbl}>
+                                            <div className="flex justify-between text-xs font-black mb-1"><span>{lbl}</span><span>{n} ({Math.round((n/t)*100)}%)</span></div>
+                                            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className={`${c} h-3`} style={{width:`${Math.round((n/t)*100)}%`}}></div></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white p-5 rounded-3xl shadow border text-center"><div className="text-3xl font-black text-green-600">{urnas.votaron}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">Ya votaron</div></div>
+                                <div className="bg-white p-5 rounded-3xl shadow border text-center"><div className="text-3xl font-black text-slate-700">{Math.max(0, urnas.cargados - urnas.votaron)}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">Cargados sin votar</div></div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {tab === "live" && (() => {
+                    const eventos = [];
+                    misV.forEach(v => {
+                        const ll = generarLlave(v.distrito,v.cod_local,v.mesa,v.orden);
+                        const vd = yaVotaronGlobal[ll]; const pc = pasoPCGlobal[ll];
+                        if (vd) eventos.push({ tipo:'voto', v, hora: vd.hora, ts: vd.timestamp||0 });
+                        if (pc) eventos.push({ tipo:'pc', v, hora: pc.hora, ts: pc.timestamp||0, por: pc.registradoPorNombre });
+                    });
+                    eventos.sort((a,b)=>b.ts-a.ts);
+                    return (
+                        <div className="animate-fade-in max-w-2xl mx-auto">
+                            <div className="bg-white p-5 rounded-3xl shadow border">
+                                <div className="flex items-center gap-2 mb-4"><Bell size={20} className="text-red-500"/><h2 className="font-black text-lg uppercase text-slate-800">Actividad en vivo</h2><span className="ml-auto w-2 h-2 rounded-full bg-green-500 animate-pulse"></span></div>
+                                <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+                                    {eventos.slice(0,100).map((e,i)=>(
+                                        <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${e.tipo==='voto'?'bg-green-50 border-green-200':'bg-blue-50 border-blue-200'}`}>
+                                            <div className="min-w-0"><div className="font-black text-sm uppercase truncate">{e.v.nombre} {e.v.apellido}</div><div className="text-[10px] font-bold text-slate-400 truncate">M{e.v.mesa} · {e.v.coordinador||'—'}{e.por?` · ${e.por}`:''}</div></div>
+                                            <div className="text-right shrink-0 ml-2">{e.tipo==='voto'?<span className="text-[11px] font-black text-green-700">✅ VOTÓ</span>:<span className="text-[11px] font-black text-blue-700">📍 PC</span>}<div className="text-[9px] font-bold text-slate-400">{e.hora}</div></div>
+                                        </div>
+                                    ))}
+                                    {eventos.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Sin actividad todavía.</div>}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+                </main>
+            </div>
+
+            {coordSel && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={()=>setCoordSel(null)}>
+                    <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-slate-50"><div className="min-w-0"><h3 className="font-black uppercase truncate">{coordSel.coordinador}</h3><p className="text-[11px] font-bold text-slate-500">{coordSel.total} cargas · {coordSel.votaron} votaron</p></div><button onClick={()=>setCoordSel(null)} className="p-1 text-slate-400"><X size={22}/></button></div>
+                        <div className="p-4 overflow-y-auto">
+                            <h4 className="text-[11px] font-black uppercase text-slate-400 mb-2">Locales donde votan</h4>
+                            <div className="flex flex-wrap gap-1 mb-4">{coordSel.localesTop.map(l=><span key={l.local} className="text-[10px] font-bold bg-slate-100 border rounded px-2 py-1 flex items-center gap-1"><MapPin size={10} className="text-red-400"/>{l.local} <b>{l.n}</b></span>)}</div>
+                            <h4 className="text-[11px] font-black uppercase text-slate-400 mb-2">Electores</h4>
+                            <div className="space-y-1">
+                                {misV.filter(v=>(v.coordinador||'SIN COORDINADOR')===coordSel.coordinador).map(v=>{
+                                    const ll=generarLlave(v.distrito,v.cod_local,v.mesa,v.orden); const vd=yaVotaronGlobal[ll]; const pc=pasoPCGlobal[ll];
+                                    return (<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre} {v.apellido}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.local}</div></div><div className="flex gap-1 shrink-0 items-center">{pc&&<span className="text-[10px]">📍</span>}{vd?<span className="text-[10px]">✅</span>:<span className="text-[10px] opacity-30">⏳</span>}</div></div>);
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {localSel && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={()=>setLocalSel(null)}>
+                    <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-slate-50"><div className="min-w-0"><h3 className="font-black uppercase truncate text-sm">{localSel}</h3><p className="text-[11px] font-bold text-slate-500">{misV.filter(v=>(v.local||'SIN LOCAL')===localSel).length} de tu lista votan acá</p></div><button onClick={()=>setLocalSel(null)} className="p-1 text-slate-400"><X size={22}/></button></div>
+                        <div className="p-4 overflow-y-auto space-y-1">
+                            {misV.filter(v=>(v.local||'SIN LOCAL')===localSel).map(v=>{
+                                const ll=generarLlave(v.distrito,v.cod_local,v.mesa,v.orden); const vd=yaVotaronGlobal[ll];
+                                return (<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre} {v.apellido}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.coordinador||'—'}</div></div>{vd?<span className="text-[9px] font-black text-green-700 shrink-0 ml-2">✅ {vd.hora}</span>:<span className="text-[10px] opacity-30 shrink-0 ml-2">⏳</span>}</div>);
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {verPasoPCTodo && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={()=>setVerPasoPCTodo(false)}>
+                    <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
+                        <div className="p-4 border-b flex justify-between items-center bg-slate-50"><div><h3 className="font-black uppercase flex items-center gap-2"><Monitor size={18} className="text-blue-500"/>Paso por PC</h3><p className="text-[11px] font-bold text-slate-500">{pasoPC.count} de {urnas.cargados} · {pasoPC.pct}%</p></div><button onClick={()=>setVerPasoPCTodo(false)} className="p-1 text-slate-400"><X size={22}/></button></div>
+                        <div className="p-4 overflow-y-auto space-y-1">
+                            {pasoPC.lista.map(v=>(<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre} {v.apellido}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.local}</div></div><div className="text-right shrink-0 ml-2"><div className="text-[10px] font-black text-blue-700">📍 {v.pc.hora}</div><div className="text-[8px] font-bold text-slate-400 truncate max-w-[110px]">{v.pc.registradoPorNombre}</div></div></div>))}
+                            {pasoPC.count===0 && <div className="text-center text-gray-400 font-bold p-6">Nadie pasó por PC aún.</div>}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
