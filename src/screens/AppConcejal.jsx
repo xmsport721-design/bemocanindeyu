@@ -74,12 +74,15 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [cargasList, setCargasList] = useState([]);
     const [importando, setImportando] = useState("");
 
+    // Coordinadores PROPIOS de este concejal (anidados bajo su nombre)
+    const miCoordPath = `coordinadores/${perfil.distrito}/${normalizarNombre(miNom)}`;
     useEffect(() => {
-        const un = onValue(ref(db, `coordinadores/${perfil.distrito}`), snap => setCoordMeta(snap.val() || {}));
+        const un = onValue(ref(db, miCoordPath), snap => setCoordMeta(snap.val() || {}));
         return () => un();
-    }, [db, perfil.distrito]);
+    }, [db, miCoordPath]);
 
-    useEffect(() => { if (tab === "carga_link") cargaListar(perfil.distrito).then(setCargasList); }, [tab, perfil.distrito]);
+    // Solo mis links (los que generé como este concejal)
+    useEffect(() => { if (tab === "carga_link") cargaListar(perfil.distrito).then(list => setCargasList(list.filter(c => c.concejal_fijo === miNom))); }, [tab, perfil.distrito, miNom]);
 
     // Coordinadores creados (en LINK COORDINADOR) + nombres para el select de REGISTRO
     const coordinadoresLista = useMemo(() => Object.values(coordMeta || {}).filter(c => c && c.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre)), [coordMeta]);
@@ -111,18 +114,24 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         return { votaron, falta, pct, cargados: misVUnicos.length, duplicados: misV.length - misVUnicos.length };
     }, [misV, misVUnicos, yaVotaronGlobal, META_URNAS]);
 
-    // Paso por PC: electores de MI lista que ya pasaron por el PC (con quién los marcó)
+    // Paso por PC: los de MI lista + cualquier consulta que YO marqué (aunque no esté en mi lista)
     const pasoPC = useMemo(() => {
-        const lista = [];
+        const lista = []; const vistos = new Set();
         misV.forEach(v => {
-            const pc = pasoPCGlobal[generarLlave(v.distrito, v.cod_local, v.mesa, v.orden)];
-            if (pc) lista.push({ ...v, pc });
+            const ll = generarLlave(v.distrito, v.cod_local, v.mesa, v.orden);
+            const pc = pasoPCGlobal[ll];
+            if (pc) { lista.push({ id: v.id, cedula: v.cedula, nombre: `${v.nombre} ${v.apellido}`.trim(), mesa: v.mesa, local: v.local, pc, voto: yaVotaronGlobal[ll], enLista: true }); vistos.add(ll); }
+        });
+        const miMarca = `CONCEJAL ${miNom.includes('-') ? miNom.split('-')[1].trim() : miNom}`;
+        Object.entries(pasoPCGlobal).forEach(([ll, pc]) => {
+            if (vistos.has(ll) || pc.registradoPorNombre !== miMarca) return;
+            lista.push({ id: ll, cedula: pc.cedula || "", nombre: pc.nombre || "(consulta suelta)", mesa: pc.mesa || "", local: pc.local || "", pc, voto: yaVotaronGlobal[ll], enLista: false });
         });
         lista.sort((a, b) => (b.pc.timestamp || 0) - (a.pc.timestamp || 0));
-        const total = misV.length;
-        const pct = total > 0 ? Math.round((lista.length / total) * 100) : 0;
+        const total = misVUnicos.length;
+        const pct = total > 0 ? Math.round((lista.filter(x => x.enLista).length / total) * 100) : 0;
         return { lista, count: lista.length, pct };
-    }, [misV, pasoPCGlobal]);
+    }, [misV, misVUnicos, pasoPCGlobal, yaVotaronGlobal, miNom]);
 
     // Ranking de coordinadores: total de cargas, cuántos votaron y en qué locales votan
     const rankingCoord = useMemo(() => {
@@ -159,14 +168,16 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     }, [db]);
 
     // Robusto: marca instantánea (no se traba/desmarca) + respaldo local + envío en 2do plano.
-    const marcarPasoPCConcejal = (llave, pcData) => {
+    // Guarda también los datos del elector (nombre/cédula) para verlos aunque no esté en la lista.
+    const marcarPasoPCConcejal = (llave, pcData, persona) => {
         if (pcData) {
             setResDiaD(r => ({ ...r, pc: null }));
             try { localStorage.removeItem(`pcpend_${llave}`); } catch {}
             remove(ref(db, `dia_d/paso_pc_checkins/${llave}`)).catch(() => {});
         } else {
             const nombreConcejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom;
-            const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}` };
+            const newData = { hora: new Date().toLocaleTimeString(), timestamp: Date.now(), registradoPorNombre: `CONCEJAL ${nombreConcejalCorto}`,
+                cedula: persona?.cedula || "", nombre: persona ? `${persona.nombre} ${persona.apellido}`.trim() : "", distrito: persona?.distrito || "", cod_local: persona?.cod_local || "", mesa: persona?.mesa || "", local: persona?.local || "", orden: persona?.orden || "" };
             setResDiaD(r => ({ ...r, pc: newData }));                               // 1) instantáneo
             try { localStorage.setItem(`pcpend_${llave}`, JSON.stringify(newData)); } catch {} // respaldo
             set(ref(db, `dia_d/paso_pc_checkins/${llave}`), newData)               // 2) 2do plano
@@ -282,7 +293,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     };
 
     // Fase 3: generar link público, listar cargas recibidas e importar
-    const refrescarCargas = async () => { setCargasList(await cargaListar(perfil.distrito)); };
+    const refrescarCargas = async () => { const list = await cargaListar(perfil.distrito); setCargasList(list.filter(c => c.concejal_fijo === miNom)); };
 
     const buscarCoordCedula = async () => {
         const ci = String(coordForm.cedula).trim();
@@ -297,7 +308,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const guardarCoordinador = () => {
         const nombre = String(coordForm.nombre).trim().toUpperCase();
         if (!nombre) return alert("Buscá la cédula o escribí el nombre del coordinador.");
-        set(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(nombre)}`), {
+        set(ref(db, `${miCoordPath}/${normalizarNombre(nombre)}`), {
             nombre, cedula: coordForm.cedula, telefono: coordForm.telefono, localidad: coordForm.localidad, zona: coordForm.zona, concejal: miNom, ts: Date.now(),
         }).then(() => { setCoordForm({ cedula: "", nombre: "", telefono: "", localidad: "", zona: "URBANA" }); })
           .catch(() => alert("No se pudo guardar."));
@@ -305,7 +316,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     const quitarCoordinador = (c) => {
         if (window.confirm(`¿Eliminar al coordinador ${c.nombre}? (No borra los votos ya cargados)`)) {
-            remove(ref(db, `coordinadores/${perfil.distrito}/${normalizarNombre(c.nombre)}`));
+            remove(ref(db, `${miCoordPath}/${normalizarNombre(c.nombre)}`));
             setLinksGenerados(prev => { const n = { ...prev }; delete n[c.nombre]; return n; });
         }
     };
@@ -433,16 +444,16 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                 {pasoPC.lista.map(v => (
                                     <div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-xl px-3 py-2 gap-2">
                                         <div className="min-w-0">
-                                            <div className="font-black text-sm uppercase truncate">{v.nombre} {v.apellido}</div>
-                                            <div className="text-[10px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.local}{v.coordinador ? ` · ${v.coordinador}` : ''}</div>
+                                            <div className="font-black text-sm uppercase truncate">{v.nombre}{!v.enLista && <span className="ml-1 text-[8px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded align-middle">FUERA DE LISTA</span>}</div>
+                                            <div className="text-[10px] font-bold text-slate-400 truncate">CI {v.cedula || '—'}{v.mesa?` · M${v.mesa}`:''}{v.local?` · ${v.local}`:''}</div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <div className="text-[11px] font-black text-blue-700">📍 {v.pc.hora}</div>
-                                            <div className="text-[9px] font-bold text-slate-400 truncate max-w-[130px]">{v.pc.registradoPorNombre || ''}</div>
+                                            {v.voto ? <div className="text-[10px] font-black text-green-700">✅ VOTÓ</div> : <div className="text-[10px] font-black text-slate-400">⏳ no votó</div>}
+                                            <div className="text-[10px] font-black text-blue-700">📍 {v.pc.hora}</div>
                                         </div>
                                     </div>
                                 ))}
-                                {pasoPC.count===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Todavía nadie de tu lista pasó por PC.</div>}
+                                {pasoPC.count===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Todavía nadie pasó por PC.</div>}
                             </div>
                         </div>
 
@@ -655,7 +666,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                     </div>
 
                                     <div className="mt-4 border-t pt-4">
-                                        <button onClick={() => marcarPasoPCConcejal(generarLlave(resDiaD.distrito, resDiaD.cod_local, resDiaD.mesa, resDiaD.orden), resDiaD.pc)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${resDiaD.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
+                                        <button onClick={() => marcarPasoPCConcejal(generarLlave(resDiaD.distrito, resDiaD.cod_local, resDiaD.mesa, resDiaD.orden), resDiaD.pc, resDiaD)} className={`w-full py-4 rounded-xl font-black text-sm transition-all duration-300 border-2 flex items-center justify-center gap-2 shadow-sm ${resDiaD.pc ? 'bg-blue-50 text-blue-800 border-blue-300' : 'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
                                             {resDiaD.pc ? <>📍 YA PASÓ POR PC ({resDiaD.pc.hora})</> : <>⏳ MARCAR "PASÓ POR PC"</>}
                                         </button>
                                     </div>
@@ -903,7 +914,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                     <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
                         <div className="p-4 border-b flex justify-between items-center bg-slate-50"><div><h3 className="font-black uppercase flex items-center gap-2"><Monitor size={18} className="text-blue-500"/>Paso por PC</h3><p className="text-[11px] font-bold text-slate-500">{pasoPC.count} de {urnas.cargados} · {pasoPC.pct}%</p></div><button onClick={()=>setVerPasoPCTodo(false)} className="p-1 text-slate-400"><X size={22}/></button></div>
                         <div className="p-4 overflow-y-auto space-y-1">
-                            {pasoPC.lista.map(v=>(<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre} {v.apellido}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa} · {v.local}</div></div><div className="text-right shrink-0 ml-2"><div className="text-[10px] font-black text-blue-700">📍 {v.pc.hora}</div><div className="text-[8px] font-bold text-slate-400 truncate max-w-[110px]">{v.pc.registradoPorNombre}</div></div></div>))}
+                            {pasoPC.lista.map(v=>(<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre}{!v.enLista && <span className="ml-1 text-[8px] bg-amber-100 text-amber-700 px-1 rounded">FUERA</span>}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula || '—'}{v.mesa?` · M${v.mesa}`:''}{v.local?` · ${v.local}`:''}</div></div><div className="text-right shrink-0 ml-2">{v.voto ? <div className="text-[9px] font-black text-green-700">✅ VOTÓ</div> : <div className="text-[9px] font-black text-slate-400">⏳</div>}<div className="text-[10px] font-black text-blue-700">📍 {v.pc.hora}</div></div></div>))}
                             {pasoPC.count===0 && <div className="text-center text-gray-400 font-bold p-6">Nadie pasó por PC aún.</div>}
                         </div>
                     </div>
