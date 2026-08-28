@@ -533,14 +533,17 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                         <button onClick={()=>{setCoordFijo(""); setForm(f=>({...f, coordinador:""}));}} className="bg-red-100 text-red-700 px-4 rounded-xl font-black text-xl" title="Soltar coordinador fijo">×</button>
                                     </div>
                                 ) : (
-                                    <div className="flex gap-2">
-                                        <select className="flex-1 p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{coordNombres.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                        {form.coordinador && <button onClick={()=>setCoordFijo(form.coordinador)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-xl font-black transition-colors" title="Fijar para cargar su lista rápido"><Pin size={16}/></button>}
-                                    </div>
+                                    <select className="w-full p-4 border-2 rounded-xl font-bold outline-none" value={form.coordinador} onChange={e=>setForm({...form, coordinador: e.target.value})}><option value="">SELECCIONE...</option>{coordNombres.map(c => <option key={c} value={c}>{c}</option>)}</select>
                                 )}
                                 <p className="text-[9px] font-bold text-slate-400 mt-1">¿Falta un coordinador? Agregalo en <b>LINK COORDINADOR</b>.</p>
                             </div>
-                            <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COLOR</label><select className={`w-full p-4 rounded-xl font-black text-white outline-none ${form.semaforo==='VERDE'?'bg-green-500':form.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={form.semaforo} onChange={e=>setForm({...form, semaforo: e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select></div>
+                            <div className="flex flex-col"><label className="text-[10px] font-bold text-gray-400 mb-1">COLOR</label>
+                                <select className={`w-full p-3 rounded-xl font-black text-white outline-none text-sm ${form.semaforo==='VERDE'?'bg-green-500':form.semaforo==='AMARILLO'?'bg-yellow-500':'bg-red-500'}`} value={form.semaforo} onChange={e=>setForm({...form, semaforo: e.target.value})}><option value="VERDE">🟢 VERDE</option><option value="AMARILLO">🟡 AMARILLO</option><option value="ROJO">🔴 ROJO</option></select>
+                                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                                    <input type="checkbox" checked={!!coordFijo} onChange={e=> e.target.checked ? (form.coordinador ? setCoordFijo(form.coordinador) : alert('Elegí primero un coordinador.')) : setCoordFijo("")} className="w-5 h-5 accent-emerald-600 shrink-0"/>
+                                    <span className="text-[11px] font-black text-slate-600 leading-tight flex items-center gap-1"><Pin size={12}/> Fijar coordinador (carga rápida)</span>
+                                </label>
+                            </div>
                         </div>
                         <button onClick={handleRegistrarConcejal} className="w-full mt-6 bg-[#2ecc71] hover:bg-green-600 text-white py-4 rounded-xl font-black shadow-lg transition-colors">GUARDAR REGISTRO</button>
 

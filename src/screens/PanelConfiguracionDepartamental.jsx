@@ -1,11 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { ref, set } from "firebase/database";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Settings, Save, Camera, RefreshCw, Edit2, Trash2 } from "lucide-react";
 import { normalizarNombre } from "../lib/helpers";
 import { DISTRITOS_CONCEPCION } from "../constants";
 
-const storage = getStorage(); // usa la app default (ya inicializada en firebase.js)
+// Comprime la imagen (máx 240px, JPEG) a un data URL liviano para guardar en RTDB
+const comprimirImagen = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+        const max = 240;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL("image/jpeg", 0.6));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("no se pudo leer la imagen")); };
+    img.src = url;
+});
 
 export default function PanelConfiguracionDepartamental({ perfil, configuracionDepartamental, db, distritoGlobal, setDistritoGlobal }) {
     const esMaster = perfil.rol === "master_departamental" || perfil.rol === "master_global";
@@ -19,20 +33,17 @@ export default function PanelConfiguracionDepartamental({ perfil, configuracionD
 
     const guardarDistrito = () => { set(ref(db, `configuracion/${distritoGlobal}`), { ...dataBruta, intendente: tInt.toUpperCase() || "NO CONFIGURADO", lista: tLis, meta_intendente: parseInt(tMetInt) || 5000, meta_concejales: parseInt(tMet) || 500, concejales: configActual.concejales }); alert(`✅ Guardado.`); };
 
-    // Función de subida de fotos
+    // Sube la foto: la comprime y la guarda como imagen (base64) en RTDB. No usa Firebase Storage.
     const subirFoto = async (e, n) => {
         const f = e.target.files[0];
         if(!f) return;
         setSubiendo(n);
         try {
-            const nombreNormalizado = normalizarNombre(n);
-            const r = storageRef(storage, `fotos/${nombreNormalizado}`);
-            await uploadBytes(r, f);
-            const url = await getDownloadURL(r);
-            await set(ref(db, `concejales_fotos/${nombreNormalizado}`), url);
-            alert("✅ Foto lista y guardada en la nube.");
+            const dataUrl = await comprimirImagen(f);
+            await set(ref(db, `concejales_fotos/${normalizarNombre(n)}`), dataUrl);
+            alert("✅ Foto guardada.");
         } catch(err) {
-            alert("Error al subir foto: " + err.message);
+            alert("Error al guardar la foto: " + err.message);
         }
         setSubiendo(null);
     };
