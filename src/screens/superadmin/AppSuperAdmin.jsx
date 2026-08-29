@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { ref, push, onValue, set, remove } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, Menu, X } from "lucide-react";
+import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, Menu, X, PieChart } from "lucide-react";
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
@@ -75,6 +75,43 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
 
     const totalVotosEmitidosDiaD = Object.keys(yaVotaronFiltrados || {}).length;
     const participacionIndependiente = totalVotosEmitidosDiaD - yaVotaronSeguros;
+
+    // ── REPORTE DE CONCEJALES (pestaña REPORTES) ──
+    // Coordinadores compartidos entre 2+ concejales (mismo nombre bajo distintos concejales)
+    const coordCompartidos = useMemo(() => {
+        const m = {};
+        (votosFiltrados || []).forEach(v => { if (!v.coordinador) return; const cc = normalizarNombre(v.concejal || ''); (m[v.coordinador] = m[v.coordinador] || new Set()).add(cc); });
+        return new Set(Object.entries(m).filter(([, s]) => s.size > 1).map(([c]) => c));
+    }, [votosFiltrados]);
+
+    const reporteConcejales = useMemo(() => {
+        const hoy = new Date().toLocaleDateString();
+        return (configApp.concejales || []).filter(c => c !== "SIN ASIGNAR").map(c => {
+            const suyos = (votosFiltrados || []).filter(v => concejalCoincide(v.concejal, c));
+            const seen = new Set(); const suyosU = suyos.filter(v => { const k = String(v.cedula); if (seen.has(k)) return false; seen.add(k); return true; });
+            const coords = new Set(suyos.map(v => v.coordinador).filter(Boolean));
+            return {
+                concejal: c, nombre: c.includes(' - ') ? c.split(' - ')[1].trim() : c,
+                total: suyosU.length,
+                hoy: suyos.filter(v => String(v.fecha || '').includes(hoy)).length,
+                verde: suyosU.filter(v => v.semaforo === 'VERDE' && !cedulasDuplicadas.has(v.cedula)).length,
+                amarillo: suyosU.filter(v => v.semaforo === 'AMARILLO' && !cedulasDuplicadas.has(v.cedula)).length,
+                rojo: suyosU.filter(v => cedulasDuplicadas.has(v.cedula) || v.semaforo === 'ROJO').length,
+                coordinadores: coords.size,
+                coordDup: [...coords].filter(x => coordCompartidos.has(x)).length,
+                duplicados: suyosU.filter(v => cedulasDuplicadas.has(v.cedula)).length,
+            };
+        }).sort((a, b) => b.total - a.total);
+    }, [votosFiltrados, cedulasDuplicadas, configApp.concejales, coordCompartidos]);
+    const reporteTotalGeneral = reporteConcejales.reduce((s, r) => s + r.total, 0) || 1;
+    const reporteMaxTotal = Math.max(1, ...reporteConcejales.map(r => r.total));
+
+    const reportePorDia = useMemo(() => {
+        const m = {};
+        (votosFiltrados || []).forEach(v => { const d = String(v.fecha || '').split(',')[0].trim() || 'S/F'; m[d] = (m[d] || 0) + 1; });
+        return Object.entries(m).map(([dia, n]) => ({ dia, n })).sort((a, b) => (Date.parse(a.dia) || 0) - (Date.parse(b.dia) || 0));
+    }, [votosFiltrados]);
+    const reporteMaxDia = Math.max(1, ...reportePorDia.map(d => d.n));
 
     const escrutinioDistrito = Object.entries(escrutinioGlobal || {}).filter(([k]) => k.startsWith(`${distritoFiltroMaster}_`));
     let totalIntendenteEscrutinio = 0;
@@ -488,6 +525,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                             { id:"dia_d", label:"LIVE / MESAS", icon:Bell },
                             { id:"escrutinio", label:"ESCRUTINIO FINAL", icon:Calculator },
                             { id:"auditoria", label:"AUDITORÍA", icon:AlertTriangle },
+                            { id:"reportes", label:"REPORTES", icon:PieChart },
                             { id:"usuarios", label:"USUARIOS", icon:UserPlus },
                             { id:"config", label:"AJUSTES", icon:Settings },
                             ...(esMaster ? [{ id:"limpiar", label:"LIMPIAR DÍA D", icon:Trash2 }] : []),
@@ -1280,6 +1318,66 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     )
                 )}
                 
+                {activeTab === "reportes" && (
+                    distritoFiltroMaster === "TODOS" ? (
+                        <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Elegí un distrito para ver el reporte de sus concejales.</p></div>
+                    ) : (
+                    <div className="space-y-6 animate-fade-in print:space-y-3">
+                        <div className="flex justify-between items-center flex-wrap gap-3">
+                            <div>
+                                <h2 className="text-2xl font-black text-slate-800">REPORTE DE CONCEJALES</h2>
+                                <p className="text-xs font-bold text-slate-400">{distritoFiltroMaster} · Corte: {new Date().toLocaleString()}</p>
+                            </div>
+                            <button onClick={()=>window.print()} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black flex items-center gap-2 shadow print:hidden"><Printer size={18}/> DESCARGAR PDF (24hs)</button>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-slate-800">{reporteTotalGeneral}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">Votos seguros (únicos)</div></div>
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-green-600">{verde}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">🟢 Verdes</div></div>
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-yellow-600">{amarillo}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">🟡 Amarillos</div></div>
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-red-600">{rojo}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">🔴 Rojos / dup</div></div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black uppercase text-slate-700 mb-4 flex items-center gap-2"><BarChart3 className="text-red-500"/> Movimientos por concejal ({reporteConcejales.length})</h3>
+                            <div className="space-y-3">
+                                {reporteConcejales.map(r => (
+                                    <div key={r.concejal}>
+                                        <div className="flex justify-between text-xs font-black mb-1"><span className="truncate uppercase">{r.nombre}</span><span>{r.total} · {Math.round(r.total/reporteTotalGeneral*100)||0}%</span></div>
+                                        <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden flex">
+                                            <div className="bg-green-500 h-4" style={{width:`${r.verde/reporteMaxTotal*100}%`}} title={`Verde ${r.verde}`}></div>
+                                            <div className="bg-yellow-500 h-4" style={{width:`${r.amarillo/reporteMaxTotal*100}%`}} title={`Amarillo ${r.amarillo}`}></div>
+                                            <div className="bg-red-500 h-4" style={{width:`${r.rojo/reporteMaxTotal*100}%`}} title={`Rojo ${r.rojo}`}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {reporteConcejales.length===0 && <div className="text-center text-gray-400 font-bold p-4 border-2 border-dashed rounded-xl">No hay concejales configurados en este distrito.</div>}
+                            </div>
+                            <div className="flex gap-4 mt-4 text-[10px] font-bold text-slate-500"><span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded"></span>Verde</span><span className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-500 rounded"></span>Amarillo</span><span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded"></span>Rojo / duplicado</span></div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border overflow-x-auto">
+                            <h3 className="font-black uppercase text-slate-700 mb-4">Detalle por concejal</h3>
+                            <table className="w-full text-left min-w-[720px] text-sm">
+                                <thead className="bg-slate-800 text-white text-[10px] uppercase"><tr><th className="p-2">Concejal</th><th className="p-2 text-center">Total</th><th className="p-2 text-center">Hoy</th><th className="p-2 text-center">🟢</th><th className="p-2 text-center">🟡</th><th className="p-2 text-center">🔴</th><th className="p-2 text-center">Coord.</th><th className="p-2 text-center">Coord. comp.</th><th className="p-2 text-center">Elec. dup.</th></tr></thead>
+                                <tbody className="divide-y">
+                                    {reporteConcejales.map(r=>(<tr key={r.concejal} className="hover:bg-slate-50"><td className="p-2 font-black uppercase">{r.nombre}</td><td className="p-2 text-center font-black">{r.total}</td><td className="p-2 text-center text-blue-600 font-bold">{r.hoy}</td><td className="p-2 text-center text-green-600 font-bold">{r.verde}</td><td className="p-2 text-center text-yellow-600 font-bold">{r.amarillo}</td><td className="p-2 text-center text-red-600 font-bold">{r.rojo}</td><td className="p-2 text-center">{r.coordinadores}</td><td className="p-2 text-center text-orange-600 font-bold">{r.coordDup}</td><td className="p-2 text-center text-red-500 font-bold">{r.duplicados}</td></tr>))}
+                                </tbody>
+                            </table>
+                            <p className="text-[10px] font-bold text-slate-400 mt-2">Coord. comp. = coordinadores que también cargó otro concejal · Elec. dup. = electores cargados por 2+ concejales (choque).</p>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black uppercase text-slate-700 mb-4">Cargas por día (cada 24hs)</h3>
+                            <div className="space-y-2">
+                                {reportePorDia.map(d=>(<div key={d.dia}><div className="flex justify-between text-xs font-black mb-1"><span>{d.dia}</span><span>{d.n}</span></div><div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-blue-500 h-3" style={{width:`${d.n/reporteMaxDia*100}%`}}></div></div></div>))}
+                                {reportePorDia.length===0 && <div className="text-center text-gray-400 p-4 font-bold">Sin cargas todavía.</div>}
+                            </div>
+                        </div>
+                    </div>
+                    )
+                )}
+
                 {activeTab === "config" && (
                     distritoFiltroMaster === "TODOS" ? <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Para configurar los datos de los intendentes o metas, selecciona el distrito que deseas ajustar en el menú.</p></div>
                     : <PanelConfiguracionDepartamental perfil={perfil} configuracionDepartamental={configuracionDepartamental} db={db} distritoGlobal={distritoFiltroMaster} setDistritoGlobal={setDistritoFiltroMaster} />
