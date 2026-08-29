@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { UserPlus, Send, CheckCircle, Loader, Search } from "lucide-react";
+import { UserPlus, Send, Loader, Search } from "lucide-react";
 import { cargaInfo, cargaAgregar, cargaEnviar } from "../lib/cargaCoordinador";
 import { buscarPadronPorCedula } from "../lib/padronSupabase";
 
@@ -9,7 +9,6 @@ export default function CargaPublica({ token }) {
   const [texto, setTexto] = useState("");
   const [concejalSel, setConcejalSel] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const [enviado, setEnviado] = useState(false);
   // Búsqueda por cédula (rápida): busca en el padrón y agrega de a uno
   const [buscarCi, setBuscarCi] = useState("");
   const [resultado, setResultado] = useState(null); // null | "NO" | {padron}
@@ -57,17 +56,14 @@ export default function CargaPublica({ token }) {
   };
 
   const enviar = async () => {
-    if (!window.confirm("¿Enviar la lista al equipo? Después no vas a poder agregar más.")) return;
     setGuardando(true);
-    try { await cargaEnviar(token); setEnviado(true); await recargar(); }
+    try { await cargaEnviar(token); await recargar(); alert("✅ Enviado al equipo. Podés seguir cargando más gente y volver a tocar ENVIAR cuando agregues. No cierres el link."); }
     catch (e) { alert("⚠️ " + (e.message || "No se pudo enviar")); }
     setGuardando(false);
   };
 
   if (info === undefined) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white"><Loader className="animate-spin"/></div>;
   if (info === null) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white p-6 text-center"><div><h1 className="text-2xl font-black mb-2">Link inválido</h1><p className="text-slate-400 font-bold">Pedile al concejal un link nuevo.</p></div></div>;
-
-  const cerrada = info.estado !== "cargando" || enviado;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -79,14 +75,8 @@ export default function CargaPublica({ token }) {
       </header>
 
       <main className="max-w-lg mx-auto p-4 mt-4">
-        {cerrada ? (
-          <div className="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-green-500 text-center">
-            <CheckCircle size={48} className="mx-auto text-green-500 mb-3"/>
-            <h2 className="text-xl font-black mb-2">¡Lista enviada!</h2>
-            <p className="text-sm font-bold text-slate-500">Enviaste {info.filas} personas. El equipo las va a revisar y cargar. Ya podés cerrar esta página.</p>
-          </div>
-        ) : (
           <div className="space-y-4">
+          {info.estado !== "cargando" && <div className="bg-green-50 border border-green-200 rounded-2xl p-3 text-center"><p className="text-sm font-black text-green-700">✅ Ya enviaste {info.filas}. Podés seguir cargando más y volver a enviar.</p></div>}
           <div className="bg-white p-6 rounded-3xl shadow-xl border">
             <h2 className="font-black text-lg mb-1 flex items-center gap-2"><Search className="text-red-600"/>Buscar por cédula</h2>
             <p className="text-xs text-slate-500 font-bold mb-3">Buscá la cédula, confirmá el nombre y agregalo. (Más rápido y seguro.)</p>
@@ -115,10 +105,10 @@ export default function CargaPublica({ token }) {
             )}
             <textarea rows={8} placeholder={"1234567\n7654321, JUAN PEREZ, 0981123456"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none focus:border-emerald-500 mb-3" value={texto} onChange={e=>setTexto(e.target.value)} />
             <button onClick={agregar} disabled={guardando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50 mb-2">{guardando ? "GUARDANDO..." : "AGREGAR A LA LISTA"}</button>
-            <button onClick={enviar} disabled={guardando || info.filas === 0} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2"><Send size={16}/> ENVIAR {info.filas > 0 ? `(${info.filas})` : ""}</button>
+            <button onClick={enviar} disabled={guardando || info.filas === 0} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2"><Send size={16}/> ENVIAR AL EQUIPO {info.filas > 0 ? `(${info.filas})` : ""}</button>
+            <p className="text-[10px] font-bold text-slate-400 text-center mt-2">Podés enviar y <b>seguir cargando</b>. El link no se cierra.</p>
           </div>
           </div>
-        )}
       </main>
     </div>
   );

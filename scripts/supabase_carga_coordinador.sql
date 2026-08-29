@@ -72,7 +72,7 @@ declare v_estado text; v_n int;
 begin
   select estado into v_estado from cargas_coordinador where token=p_token;
   if v_estado is null then raise exception 'link invalido'; end if;
-  if v_estado <> 'cargando' then raise exception 'esta lista ya fue enviada'; end if;
+  -- El coordinador puede seguir agregando SIEMPRE (el link no se cierra al enviar).
   insert into carga_filas(token, cedula, nombre, telefono, concejal)
   select p_token, trim(x->>'cedula'), upper(coalesce(x->>'nombre','')), (x->>'telefono'), (x->>'concejal')
   from jsonb_array_elements(p_filas) x
@@ -86,7 +86,7 @@ grant execute on function carga_agregar(text,jsonb) to anon, authenticated;
 create or replace function carga_enviar(p_token text)
 returns void language plpgsql security definer set search_path=public as $$
 begin
-  update cargas_coordinador set estado='enviado', enviado_en=now() where token=p_token and estado='cargando';
+  update cargas_coordinador set estado='enviado', enviado_en=coalesce(enviado_en, now()) where token=p_token;
 end $$;
 grant execute on function carga_enviar(text) to anon, authenticated;
 
