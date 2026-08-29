@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import './index.generated.css';
-import { ref, onValue, get, set, onDisconnect, query, orderByChild, equalTo } from "firebase/database";
+import { ref, onValue, get, set, onDisconnect } from "firebase/database";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { ShieldAlert } from "lucide-react";
 import { db, auth } from "./firebase";
@@ -27,7 +27,7 @@ export default function BemoSystem() {
   const [usuarioActivo, setUsuarioActivo] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
-  const [padronGlobal, setPadronGlobal] = useState({});
+  const [padronGlobal] = useState({}); // vacío: el padrón vive en Supabase
   const [votosSeguros, setVotosSeguros] = useState([]);
   const [yaVotaronGlobal, setYaVotaronGlobal] = useState({});
   const [mesasCerradas, setMesasCerradas] = useState({});
@@ -50,15 +50,10 @@ export default function BemoSystem() {
         if (perfilSnap.exists()) {
             const pData = perfilSnap.val();
             const rolUsuario = String(pData.rol).toLowerCase().trim();
-            const distritoDelUsuario = pData.distrito;
             setPerfil({ ...pData, rol: rolUsuario });
 
-            // El padrón se consulta en Supabase (point queries), no se baja entero.
-            // Solo el veedor carga su distrito desde RTDB para la lista de su mesa (Día D).
-            if (rolUsuario === "veedor" && distritoDelUsuario) {
-                const padronQuery = query(ref(db, 'padron'), orderByChild('distrito'), equalTo(distritoDelUsuario));
-                get(padronQuery).then(s => s.exists() && setPadronGlobal(s.val() || {}));
-            }
+            // Todo el padrón (búsquedas y la mesa del veedor) se consulta en Supabase.
+            // Firebase RTDB queda EXCLUSIVO para el Día D (votos, paso PC, escrutinio).
         } else { setPerfil({ rol: 'pendiente' }); }
 
         onValue(ref(db, 'configuracion'), (snap) => setConfiguracionDepartamental(snap.val() || {}));
@@ -111,7 +106,7 @@ export default function BemoSystem() {
   const rol = perfil?.rol;
   
   if (rol === 'pendiente') return (<div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center"><ShieldAlert size={64} className="text-yellow-500 mb-4" /><h1 className="text-2xl font-black mb-2">CUENTA EN REVISIÓN</h1><p className="text-gray-400 mb-8 max-w-sm">Avisa a tu Administrador Local para que active tu acceso.</p><button onClick={()=>signOut(auth)} className="bg-red-600 px-6 py-3 rounded-xl font-bold">CERRAR SESIÓN</button></div>);
-  if (rol === 'veedor') return <Suspense fallback={<CargandoPantalla/>}><AppVeedor padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} /></Suspense>;
+  if (rol === 'veedor') return <Suspense fallback={<CargandoPantalla/>}><AppVeedor yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} escrutinioGlobal={escrutinioGlobal} configApp={configApp} auth={auth} db={db} /></Suspense>;
   if (rol === 'concejal') return <Suspense fallback={<CargandoPantalla/>}><AppConcejal perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} configApp={configApp} auth={auth} db={db} usuarioActivo={usuarioActivo} asignacionesDirigentes={asignacionesDirigentes} /></Suspense>;
   if (rol === 'dirigente') return <Suspense fallback={<CargandoPantalla/>}><AppDirigente padronGlobal={padronGlobal} yaVotaronGlobal={yaVotaronGlobal} pasoPCGlobal={pasoPCGlobal} asignacionesDirigentes={asignacionesDirigentes} configApp={configApp} auth={auth} db={db} /></Suspense>;
   if (rol === 'super_admin' || rol === 'master_departamental') return <Suspense fallback={<CargandoPantalla/>}><AppSuperAdmin perfil={perfil} padronGlobal={padronGlobal} votosSeguros={votosSeguros} yaVotaronGlobal={yaVotaronGlobal} mesasCerradas={mesasCerradas} asignacionesVeedores={asignacionesVeedores} veedoresOnline={veedoresOnline} escrutinioGlobal={escrutinioGlobal} fotosConcejales={fotosConcejales} pasoPCGlobal={pasoPCGlobal} configuracionDepartamental={configuracionDepartamental} usuariosRegistrados={usuariosRegistrados} usuariosOnline={usuariosOnline} auth={auth} db={db} usuarioActivo={usuarioActivo} /></Suspense>;

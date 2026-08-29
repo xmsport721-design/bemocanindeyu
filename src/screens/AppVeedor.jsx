@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { ref, set, remove, update, onValue, query, orderByKey, startAt, endAt } from "firebase/database";
 import { signOut } from "firebase/auth";
 import { Unlock, Lock, ClipboardList, CheckCircle } from "lucide-react";
 import { generarLlave, generarLlaveMesa } from "../lib/llaves";
+import { padronDeMesa } from "../lib/padronSupabase";
 
-export default function AppVeedor({ padronGlobal, mesasCerradas, asignacionesVeedores, escrutinioGlobal, configApp, auth, db }) {
+export default function AppVeedor({ mesasCerradas, asignacionesVeedores, escrutinioGlobal, configApp, auth, db }) {
     const [vs, setVs] = useState(null);
     const [ciIn, setCiIn] = useState("");
     const [fMesa, setFMesa] = useState("");
@@ -12,6 +13,21 @@ export default function AppVeedor({ padronGlobal, mesasCerradas, asignacionesVee
     // Pintado robusto: marca optimista local (instantánea) + votos reales de la mesa (RTDB, tiempo real)
     const [votosMesa, setVotosMesa] = useState({});     // llave -> data (solo esta mesa)
     const [marcadosLocal, setMarcadosLocal] = useState({}); // orden -> bool (optimista)
+    const [padronMesa, setPadronMesa] = useState([]);   // SOLO esta mesa (Supabase) + cache local
+    const [cargandoMesa, setCargandoMesa] = useState(false);
+
+    // Descarga SOLO los electores de esta mesa desde Supabase (no todo el distrito).
+    // Cache local primero (arranque instantáneo / offline), luego refresca.
+    useEffect(() => {
+        if (!vs) return;
+        const cacheKey = `padronmesa_${vs.distrito}_${vs.cod_local}_${vs.mesa}`;
+        try { const c = localStorage.getItem(cacheKey); if (c) setPadronMesa(JSON.parse(c)); } catch {}
+        setCargandoMesa(true);
+        padronDeMesa(vs.distrito, vs.cod_local, vs.mesa).then(rows => {
+            const items = rows.map(r => ({ ci: String(r.cedula), cedula: String(r.cedula), nombre: r.nombre, apellido: r.apellido, orden: r.orden, distrito: vs.distrito, cod_local: vs.cod_local, mesa: vs.mesa }));
+            if (items.length) { setPadronMesa(items); try { localStorage.setItem(cacheKey, JSON.stringify(items)); } catch {} }
+        }).finally(() => setCargandoMesa(false));
+    }, [vs]);
 
     const [fEsc, setFEsc] = useState({ intendente: "", concejales: {}, rivalesIntendente: [], rivalesConcejales: [], blancos: "", nulos: "" });
     const [mEdEsc, setMEdEsc] = useState(false);
@@ -63,12 +79,6 @@ export default function AppVeedor({ padronGlobal, mesasCerradas, asignacionesVee
                 .catch(() => {});
         } catch {}
     }, [llMA, db]);
-
-    const padronMesa = useMemo(() =>
-        Object.entries(padronGlobal || {}).map(([ci, d]) => ({ ci, ...d }))
-            .filter(p => vs && String(p.mesa) === String(vs.mesa) && p.distrito === vs.distrito && String(p.cod_local) === String(vs.cod_local))
-            .sort((a, b) => (parseInt(a.orden) || 0) - (parseInt(b.orden) || 0)),
-    [padronGlobal, vs]);
 
     // ¿votó? — la marca local optimista manda; si no, lo que dice RTDB
     const estaMarcado = (orden) => {
@@ -123,7 +133,7 @@ export default function AppVeedor({ padronGlobal, mesasCerradas, asignacionesVee
                                   <td className="p-3"><button onClick={() => pintar(v)} className={`w-full py-2 rounded font-black text-[10px] border-2 flex items-center justify-center gap-1 transition-colors ${voto ? 'bg-green-500 border-green-600 text-white' : 'border-slate-300 text-slate-500'}`}>{voto ? <><CheckCircle size={12}/> VOTÓ</> : 'PINTAR'}</button></td>
                               </tr>);
                           })}
-                          {padronMesa.length === 0 && <tr><td colSpan="3" className="text-center py-8 text-gray-400 font-bold">No hay padrón cargado para esta mesa.</td></tr>}
+                          {padronMesa.length === 0 && <tr><td colSpan="3" className="text-center py-8 text-gray-400 font-bold">{cargandoMesa ? "Cargando electores de la mesa…" : "No hay electores en esta mesa."}</td></tr>}
                       </tbody></table></div>
                       <button onClick={()=>{if(window.confirm("¿Cerrar Escrutinio?")){set(ref(db, `dia_d/mesas_cerradas/${llMA}`),{hora:new Date().toLocaleTimeString(), cerradoPor:vs.nombre}); setMEdEsc(true);}}} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-2xl flex justify-center gap-2"><Lock/> CERRAR MESA</button>
                   </>

@@ -45,11 +45,7 @@ export async function padronPorLocalMesa(distrito) {
 
 // Padrón de UNA mesa puntual (distrito + local + mesa) — los habilitados, ordenados por orden.
 export async function padronDeMesa(distrito, codLocal, mesa) {
-  const { data, error } = await supabase
-    .from("padron")
-    .select("cedula,nombre,apellido,orden")
-    .eq("distrito", distrito).eq("cod_local", String(codLocal)).eq("mesa", String(mesa))
-    .limit(1000);
+  const { data, error } = await supabase.rpc("padron_de_mesa", { dist: distrito, cl: String(codLocal), m: String(mesa) });
   if (error) { console.error("Supabase padrón de mesa:", error.message); return []; }
   return (data || []).sort((a, b) => (parseInt(a.orden) || 0) - (parseInt(b.orden) || 0));
 }
