@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { ref, push, onValue, set, remove } from "firebase/database";
+import { ref, push, onValue, set, remove, update } from "firebase/database";
 import { signOut } from "firebase/auth";
 import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, Menu, X, PieChart } from "lucide-react";
 import { auth } from "../../firebase";
-import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES } from "../../constants";
+import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES, INSTITUCIONES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
-import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito, padronPorLocalMesa, padronDeMesa } from "../../lib/padronSupabase";
+import { buscarPadronPorCedula, buscarPadronPorNombre, contarPadronDistrito, padronPorLocalMesa, padronDeMesa, buscarPadronPorCedulasLote } from "../../lib/padronSupabase";
+import { cargaCrear, cargaListar, cargaFilasGet, cargaMarcarImportada, cargaEliminar } from "../../lib/cargaCoordinador";
 import { normalizarNombre, concejalCoincide, enviarWhatsAppCarnet, imprimirCarnetFisico } from "../../lib/helpers";
 import PanelUsuarios from "../PanelUsuarios";
 import PanelConfiguracionDepartamental from "../PanelConfiguracionDepartamental";
@@ -470,6 +471,100 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         );
     };
 
+    // ── INSTITUCIONES + LINK/MASIVA del adm local ──
+    const [instForm, setInstForm] = useState({ institucion: "", responsable: "", cedula: "", telefono: "", zona: "URBANA" });
+    const [instCoords, setInstCoords] = useState({});
+    const [instBuscando, setInstBuscando] = useState(false);
+    const [instLinks, setInstLinks] = useState({});
+    const [instCargas, setInstCargas] = useState([]);
+    const [instImportando, setInstImportando] = useState("");
+    const [instMasivoTexto, setInstMasivoTexto] = useState("");
+    const [instMasivoCoord, setInstMasivoCoord] = useState("");
+    const [instMasivoResult, setInstMasivoResult] = useState(null);
+    const [instMasivoCargando, setInstMasivoCargando] = useState(false);
+    const [instMasivoGuardando, setInstMasivoGuardando] = useState(false);
+
+    useEffect(() => {
+        if (distritoFiltroMaster === "TODOS") { setInstCoords({}); return; }
+        const un = onValue(ref(db, `coordinadores_inst/${distritoFiltroMaster}`), snap => setInstCoords(snap.val() || {}));
+        return () => un();
+    }, [db, distritoFiltroMaster]);
+
+    const instLista = Object.entries(instCoords || {}).map(([k, v]) => ({ key: k, ...v })).sort((a, b) => (a.institucion || '').localeCompare(b.institucion || ''));
+    const refrescarInstCargas = async () => { const list = await cargaListar(distritoFiltroMaster); setInstCargas(list.filter(c => String(c.concejal_fijo || '').startsWith('INST:'))); };
+    useEffect(() => { if (activeTab === "instituciones" && distritoFiltroMaster !== "TODOS") refrescarInstCargas(); }, [activeTab, distritoFiltroMaster]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const buscarInstCedula = async () => {
+        const ci = String(instForm.cedula).trim(); if (!ci) return;
+        setInstBuscando(true);
+        const p = await buscarPadronPorCedula(ci);
+        if (p) setInstForm(f => ({ ...f, responsable: `${p.nombre} ${p.apellido}`.trim() }));
+        else alert("Cédula no encontrada (podés escribir el nombre a mano).");
+        setInstBuscando(false);
+    };
+    const guardarInstCoord = () => {
+        const inst = String(instForm.institucion).trim().toUpperCase();
+        const resp = String(instForm.responsable).trim().toUpperCase();
+        if (!inst || !resp) return alert("Elegí institución y cargá el responsable.");
+        set(ref(db, `coordinadores_inst/${distritoFiltroMaster}/${normalizarNombre(inst + "_" + resp)}`), { institucion: inst, responsable: resp, cedula: instForm.cedula, telefono: instForm.telefono, zona: instForm.zona, ts: Date.now() })
+            .then(() => setInstForm({ institucion: "", responsable: "", cedula: "", telefono: "", zona: "URBANA" }))
+            .catch(() => alert("No se pudo guardar."));
+    };
+    const eliminarInstCoord = (key) => { if (window.confirm("¿Eliminar este coordinador institucional?")) remove(ref(db, `coordinadores_inst/${distritoFiltroMaster}/${key}`)); };
+    const generarLinkInst = async (c) => {
+        try {
+            const token = await cargaCrear({ distrito: distritoFiltroMaster, zona: c.zona, coordinador: `${c.institucion}: ${c.responsable}`, telefono: c.telefono, concejalFijo: `INST: ${c.institucion}`, concejales: configApp.concejales || [] });
+            setInstLinks(prev => ({ ...prev, [c.key]: `${window.location.origin}/?carga=${token}` }));
+            refrescarInstCargas();
+        } catch (e) { alert("No se pudo crear el link. ¿Corriste el SQL Fase 3?\n" + (e.message || "")); }
+    };
+    const importarInstCarga = async (c) => {
+        setInstImportando(c.token);
+        try {
+            const filas = await cargaFilasGet(c.token);
+            const enc = await buscarPadronPorCedulasLote(filas.map(f => f.cedula), distritoFiltroMaster);
+            const encMap = {}; enc.forEach(p => { encMap[String(p.cedula)] = p; });
+            const telMap = {}; filas.forEach(f => { if (f.telefono) telMap[String(f.cedula)] = f.telefono; });
+            const ya = new Set(votosSeguros.filter(v => v.distrito === distritoFiltroMaster).map(v => String(v.cedula)));
+            const updates = {}; let n = 0;
+            filas.forEach(f => {
+                const p = encMap[String(f.cedula)]; if (!p || ya.has(String(f.cedula))) return;
+                const key = push(ref(db, 'votos_seguros')).key;
+                updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: telMap[String(f.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: "SIN ASIGNAR", coordinador: c.coordinador_nombre, institucion: String(c.coordinador_nombre || '').split(':')[0], semaforo: "VERDE", registradoPor: usuarioActivo?.email || "ADM", fecha: new Date().toLocaleString(), origen: "institucion_link" };
+                n++;
+            });
+            if (n > 0) await update(ref(db, 'votos_seguros'), updates);
+            await cargaMarcarImportada(c.token); await refrescarInstCargas();
+            alert(`✅ Importados ${n} de ${filas.length}.`);
+        } catch (e) { alert("Error al importar: " + (e.message || "")); }
+        setInstImportando("");
+    };
+    const eliminarInstCargaLista = async (token) => { if (!window.confirm("¿Eliminar esta lista/link?")) return; try { await cargaEliminar(token); refrescarInstCargas(); } catch (e) { alert("No se pudo: " + (e.message || "")); } };
+    const cruzarInstMasivo = async () => {
+        const cedulas = Array.from(new Set(instMasivoTexto.split(/\r?\n/).map(l => (l.match(/\d+/g) || [])[0]).filter(Boolean)));
+        if (!cedulas.length) return alert("Pegá al menos una cédula.");
+        setInstMasivoCargando(true);
+        const enc = await buscarPadronPorCedulasLote(cedulas, distritoFiltroMaster);
+        const encMap = {}; enc.forEach(p => encMap[String(p.cedula)] = p);
+        setInstMasivoResult({ encontrados: cedulas.filter(ci => encMap[ci]).map(ci => encMap[ci]), noEncontrados: cedulas.filter(ci => !encMap[ci]) });
+        setInstMasivoCargando(false);
+    };
+    const cargarInstMasivo = () => {
+        if (!instMasivoResult || !instMasivoResult.encontrados.length) return;
+        if (!instMasivoCoord) return alert("Elegí el coordinador institucional.");
+        setInstMasivoGuardando(true);
+        const ya = new Set(votosSeguros.filter(v => v.distrito === distritoFiltroMaster).map(v => String(v.cedula)));
+        const updates = {}; let n = 0;
+        instMasivoResult.encontrados.forEach(p => {
+            if (ya.has(String(p.cedula))) return;
+            const key = push(ref(db, 'votos_seguros')).key;
+            updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: "SIN ASIGNAR", coordinador: instMasivoCoord, institucion: String(instMasivoCoord).split(':')[0], semaforo: "VERDE", registradoPor: usuarioActivo?.email || "ADM", fecha: new Date().toLocaleString(), origen: "institucion_masiva" };
+            n++;
+        });
+        if (n === 0) { setInstMasivoGuardando(false); return alert("Todos ya estaban cargados."); }
+        update(ref(db, 'votos_seguros'), updates).then(() => { setInstMasivoResult(null); setInstMasivoTexto(""); alert(`✅ Cargados ${n}.`); }).catch(() => alert("No se pudo guardar.")).finally(() => setInstMasivoGuardando(false));
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
             <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-slate-900 text-white p-4 shadow-xl border-b-4 border-red-600 sticky top-0 z-50 print:hidden">
@@ -537,6 +632,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                             { id:"escrutinio", label:"ESCRUTINIO FINAL", icon:Calculator },
                             { id:"auditoria", label:"AUDITORÍA", icon:AlertTriangle },
                             { id:"reportes", label:"REPORTES", icon:PieChart },
+                            { id:"instituciones", label:"INSTITUCIONES", icon:IdCard },
                             { id:"usuarios", label:"USUARIOS", icon:UserPlus },
                             { id:"config", label:"AJUSTES", icon:Settings },
                             ...(esMaster ? [{ id:"limpiar", label:"LIMPIAR DÍA D", icon:Trash2 }] : []),
@@ -1397,6 +1493,64 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                 </tbody>
                             </table>
                             )}
+                        </div>
+                    </div>
+                    )
+                )}
+
+                {activeTab === "instituciones" && (
+                    distritoFiltroMaster === "TODOS" ? (
+                        <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Elegí un distrito para gestionar sus coordinadores institucionales.</p></div>
+                    ) : (
+                    <div className="space-y-6 max-w-3xl mx-auto animate-fade-in">
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h2 className="font-black text-lg flex items-center gap-2 mb-1"><IdCard className="text-red-600"/> COORDINADOR POR INSTITUCIÓN</h2>
+                            <p className="text-xs text-slate-500 font-bold mb-4">SENASA, IPS, ANDE, etc. Cargá quién es el responsable. Sus cargas cuentan para el intendente.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                                <select value={INSTITUCIONES.includes(instForm.institucion) ? instForm.institucion : ""} onChange={e=>setInstForm({...instForm, institucion:e.target.value})} className="p-3 border-2 rounded-xl font-bold outline-none"><option value="">INSTITUCIÓN...</option>{INSTITUCIONES.map(i=><option key={i} value={i}>{i}</option>)}</select>
+                                <select value={instForm.zona} onChange={e=>setInstForm({...instForm, zona:e.target.value})} className="p-3 border-2 rounded-xl font-bold outline-none"><option value="URBANA">🏙️ URBANA</option><option value="RURAL">🌾 RURAL</option></select>
+                            </div>
+                            <input type="text" placeholder="…o escribí otra institución" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none mb-2" value={instForm.institucion} onChange={e=>setInstForm({...instForm, institucion:e.target.value.toUpperCase()})} />
+                            <div className="flex gap-2 mb-2">
+                                <input type="number" placeholder="CÉDULA DEL RESPONSABLE" className="flex-1 p-3 border-2 rounded-xl font-bold text-center outline-none" value={instForm.cedula} onChange={e=>setInstForm({...instForm, cedula:e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarInstCedula()} />
+                                <button onClick={buscarInstCedula} disabled={instBuscando} className="bg-slate-800 text-white px-5 rounded-xl font-black disabled:opacity-50">{instBuscando?'...':<Search size={18}/>}</button>
+                            </div>
+                            <input type="text" placeholder="RESPONSABLE (nombre y apellido)" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none mb-2" value={instForm.responsable} onChange={e=>setInstForm({...instForm, responsable:e.target.value.toUpperCase()})} />
+                            <input type="text" placeholder="TELÉFONO" className="w-full p-3 border-2 border-blue-200 rounded-xl font-bold outline-none mb-3" value={instForm.telefono} onChange={e=>setInstForm({...instForm, telefono:e.target.value})} />
+                            <button onClick={guardarInstCoord} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black">+ GUARDAR COORDINADOR</button>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black text-sm uppercase text-slate-500 mb-3">Coordinadores institucionales ({instLista.length})</h3>
+                            <div className="space-y-2">
+                                {instLista.map(c=>(
+                                    <div key={c.key} className="border rounded-2xl p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="min-w-0"><div className="font-black text-sm uppercase truncate">{c.institucion}</div><div className="text-[10px] font-bold text-slate-400 truncate">👤 {c.responsable}{c.cedula?` · CI ${c.cedula}`:''}{c.telefono?` · 📞 ${c.telefono}`:''} · {c.zona}</div></div>
+                                            <div className="flex gap-2 shrink-0"><button onClick={()=>generarLinkInst(c)} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg font-black text-xs flex items-center gap-1"><Send size={14}/> LINK</button><button onClick={()=>eliminarInstCoord(c.key)} className="bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-lg"><Trash2 size={15}/></button></div>
+                                        </div>
+                                        {instLinks[c.key] && (<div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2"><div className="text-[10px] font-mono break-all bg-white border rounded p-2 mb-2">{instLinks[c.key]}</div><div className="flex gap-2"><button onClick={()=>{navigator.clipboard?.writeText(instLinks[c.key]); alert('Copiado');}} className="flex-1 bg-slate-800 text-white py-1.5 rounded-lg font-black text-[11px]">COPIAR</button><a href={`https://wa.me/${c.telefono?c.telefono.replace(/\D/g,''):''}?text=${encodeURIComponent('Cargá tu gente acá: '+instLinks[c.key])}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-600 text-white py-1.5 rounded-lg font-black text-[11px] text-center">WHATSAPP</a></div></div>)}
+                                    </div>
+                                ))}
+                                {instLista.length===0 && <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Agregá tu primer coordinador institucional.</div>}
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <div className="flex items-center justify-between mb-3"><h3 className="font-black text-sm uppercase text-slate-500">Listas recibidas</h3><button onClick={refrescarInstCargas} className="text-slate-400 hover:text-slate-700"><RefreshCw size={16}/></button></div>
+                            <div className="space-y-2">
+                                {instCargas.map(c=>(<div key={c.token} className="border rounded-2xl p-3 flex items-center justify-between gap-2"><div className="min-w-0"><div className="font-black text-sm uppercase truncate">{c.coordinador_nombre}</div><div className="text-[10px] font-bold text-slate-400">{c.filas} personas · {c.estado}</div></div><div className="flex items-center gap-2 shrink-0">{c.estado==='enviado'?<button onClick={()=>importarInstCarga(c)} disabled={instImportando===c.token} className="bg-emerald-600 text-white px-3 py-2 rounded-lg font-black text-xs disabled:opacity-50">{instImportando===c.token?'IMPORTANDO...':'IMPORTAR'}</button>:c.estado==='importado'?<span className="text-[11px] font-black text-green-600">✅</span>:<span className="text-[11px] font-black text-slate-400">⏳</span>}<button onClick={()=>eliminarInstCargaLista(c.token)} className="bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-lg"><Trash2 size={15}/></button></div></div>))}
+                                {instCargas.length===0 && <div className="text-center text-gray-400 font-bold p-4">No hay listas todavía.</div>}
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black text-lg flex items-center gap-2 mb-1"><Download className="text-emerald-600"/> CARGA MASIVA INSTITUCIONAL</h3>
+                            <p className="text-xs text-slate-500 font-bold mb-3">Pegá cédulas (una por línea), cruzamos con el padrón y cargamos al coordinador elegido.</p>
+                            <select value={instMasivoCoord} onChange={e=>setInstMasivoCoord(e.target.value)} className="w-full p-3 border-2 rounded-xl font-bold outline-none mb-2"><option value="">ELEGÍ COORDINADOR/INSTITUCIÓN...</option>{instLista.map(c=><option key={c.key} value={`${c.institucion}: ${c.responsable}`}>{c.institucion}: {c.responsable}</option>)}</select>
+                            <textarea rows={5} placeholder={"1234567\n7654321"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none mb-2" value={instMasivoTexto} onChange={e=>setInstMasivoTexto(e.target.value)} />
+                            <button onClick={cruzarInstMasivo} disabled={instMasivoCargando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black disabled:opacity-50">{instMasivoCargando?'CRUZANDO...':'CRUZAR CON PADRÓN'}</button>
+                            {instMasivoResult && (<div className="mt-3 bg-slate-50 border rounded-2xl p-3"><div className="flex gap-3 mb-2 flex-wrap"><span className="bg-green-100 text-green-800 font-black px-3 py-1 rounded-full text-sm">✅ {instMasivoResult.encontrados.length}</span>{instMasivoResult.noEncontrados.length>0 && <span className="bg-red-100 text-red-700 font-black px-3 py-1 rounded-full text-sm">❌ {instMasivoResult.noEncontrados.length}</span>}</div><div className="max-h-40 overflow-y-auto text-xs space-y-1 mb-2">{instMasivoResult.encontrados.map(p=>(<div key={p.cedula} className="flex justify-between items-center bg-white border rounded px-2 py-1 gap-2"><span className="font-bold truncate">{p.nombre} {p.apellido}</span><span className="flex items-center gap-2 shrink-0"><span className="text-slate-400 text-[10px]">CI {p.cedula}</span><button onClick={()=>setInstMasivoResult(r=>({...r, encontrados: r.encontrados.filter(x=>String(x.cedula)!==String(p.cedula))}))} className="text-red-400 font-black">✕</button></span></div>))}</div><button onClick={cargarInstMasivo} disabled={instMasivoGuardando||!instMasivoResult.encontrados.length} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black disabled:opacity-50">{instMasivoGuardando?'CARGANDO...':`CARGAR ${instMasivoResult.encontrados.length}`}</button></div>)}
                         </div>
                     </div>
                     )
