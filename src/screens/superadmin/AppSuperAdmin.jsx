@@ -113,6 +113,17 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     }, [votosFiltrados]);
     const reporteMaxDia = Math.max(1, ...reportePorDia.map(d => d.n));
 
+    // Avance por concejal por día (derivado de la fecha de cada carga → automático y exacto)
+    const avanceDiario = useMemo(() => {
+        const dias = reportePorDia.map(d => d.dia);
+        const map = {};
+        (votosFiltrados || []).forEach(v => {
+            const k = normalizarNombre(v.concejal || ''); const dia = String(v.fecha || '').split(',')[0].trim() || 'S/F';
+            (map[k] = map[k] || {})[dia] = ((map[k] || {})[dia] || 0) + 1;
+        });
+        return { dias, filas: reporteConcejales.map(r => ({ nombre: r.nombre, counts: dias.map(d => (map[normalizarNombre(r.concejal)] || {})[d] || 0) })) };
+    }, [votosFiltrados, reportePorDia, reporteConcejales]);
+
     const escrutinioDistrito = Object.entries(escrutinioGlobal || {}).filter(([k]) => k.startsWith(`${distritoFiltroMaster}_`));
     let totalIntendenteEscrutinio = 0;
     let totalConcejalesEscrutinio = 0;
@@ -1373,6 +1384,19 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                 {reportePorDia.map(d=>(<div key={d.dia}><div className="flex justify-between text-xs font-black mb-1"><span>{d.dia}</span><span>{d.n}</span></div><div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-blue-500 h-3" style={{width:`${d.n/reporteMaxDia*100}%`}}></div></div></div>))}
                                 {reportePorDia.length===0 && <div className="text-center text-gray-400 p-4 font-bold">Sin cargas todavía.</div>}
                             </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border overflow-x-auto">
+                            <h3 className="font-black uppercase text-slate-700 mb-1">Avance por concejal (por día)</h3>
+                            <p className="text-[10px] font-bold text-slate-400 mb-4">Cuánto cargó cada concejal cada día — para apretar la carga en los días previos.</p>
+                            {avanceDiario.dias.length === 0 ? <div className="text-center text-gray-400 p-4 font-bold">Sin cargas todavía.</div> : (
+                            <table className="w-full text-left text-xs min-w-[600px]">
+                                <thead className="bg-slate-800 text-white uppercase text-[10px]"><tr><th className="p-2 sticky left-0 bg-slate-800">Concejal</th>{avanceDiario.dias.map(d=><th key={d} className="p-2 text-center whitespace-nowrap">{d}</th>)}<th className="p-2 text-center">Total</th></tr></thead>
+                                <tbody className="divide-y">
+                                    {avanceDiario.filas.map(f=>{ const tot=f.counts.reduce((s,n)=>s+n,0); return (<tr key={f.nombre} className="hover:bg-slate-50"><td className="p-2 font-black uppercase sticky left-0 bg-white">{f.nombre}</td>{f.counts.map((n,i)=><td key={i} className={`p-2 text-center font-bold ${n>0?'text-slate-800':'text-slate-300'}`}>{n||'·'}</td>)}<td className="p-2 text-center font-black text-red-700">{tot}</td></tr>);})}
+                                </tbody>
+                            </table>
+                            )}
                         </div>
                     </div>
                     )

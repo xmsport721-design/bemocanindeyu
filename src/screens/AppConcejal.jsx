@@ -3,14 +3,17 @@ import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
 import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle, Send, Edit2 } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico, enviarWhatsAppCarnet } from "../lib/helpers";
-import { FOTOS_LOCALES_CONCEJALES } from "../constants";
+import { FOTOS_LOCALES_CONCEJALES, enModoDiaD } from "../constants";
 import { generarLlave } from "../lib/llaves";
 import { buscarPadronPorCedula, buscarPadronPorNombre, buscarPadronPorCedulasLote } from "../lib/padronSupabase";
 import { cargaCrear, cargaListar, cargaFilasGet, cargaMarcarImportada, cargaEliminar } from "../lib/cargaCoordinador";
 
 export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pasoPCGlobal, escrutinioGlobal, fotosConcejales, configApp, auth, db, usuarioActivo, asignacionesDirigentes }) {
-    const [tab, setTab] = useState("registro");
+    const modoDiaD = enModoDiaD(); // desde el 03-oct: carga cerrada, solo consulta
+    const [tab, setTab] = useState(modoDiaD ? "dashboard" : "registro");
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    // Si estamos en Día D y quedó una pestaña de carga, redirige a PANEL
+    useEffect(() => { if (modoDiaD && (tab === "registro" || tab === "carga_link")) setTab("dashboard"); }, [modoDiaD, tab]);
     // Modales del dashboard
     const [coordSel, setCoordSel] = useState(null);   // coordinador seleccionado (detalle)
     const [localSel, setLocalSel] = useState(null);    // local seleccionado (quiénes votan ahí)
@@ -393,7 +396,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         { id: "live", label: "LIVE", icon: Bell },
         { id: "dirigentes", label: "MIS DIRIGENTES", icon: UserPlus },
         { id: "carga_link", label: "LINK COORDINADOR", icon: Send },
-    ];
+    ].filter(n => !modoDiaD || (n.id !== "registro" && n.id !== "carga_link"));
     const irA = (id) => { setTab(id); setSidebarOpen(false); };
 
     return (
@@ -436,6 +439,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                 </aside>
 
                 <main className="flex-1 min-w-0 p-4 md:p-6 max-w-5xl w-full mx-auto">
+                {modoDiaD && <div className="bg-red-600 text-white text-center text-xs font-black py-2 px-3 rounded-xl mb-4">🗳️ MODO DÍA D — La carga de datos está cerrada. Solo consulta: Día D Buscador, Dirigentes y Reportes.</div>}
                 {tab === "dashboard" && (
                     <div className="space-y-5 animate-fade-in">
                         {/* ESTADO DE URNAS (META) */}

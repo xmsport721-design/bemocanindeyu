@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { UserPlus, Send, Loader, Search } from "lucide-react";
 import { cargaInfo, cargaAgregar, cargaEnviar } from "../lib/cargaCoordinador";
 import { buscarPadronPorCedula } from "../lib/padronSupabase";
+import { enModoDiaD } from "../constants";
 
 // Página PÚBLICA (sin login) a la que entra el coordinador con su link único (?carga=TOKEN)
 export default function CargaPublica({ token }) {
@@ -64,6 +65,13 @@ export default function CargaPublica({ token }) {
 
   if (info === undefined) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white"><Loader className="animate-spin"/></div>;
   if (info === null) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white p-6 text-center"><div><h1 className="text-2xl font-black mb-2">Link inválido</h1><p className="text-slate-400 font-bold">Pedile al concejal un link nuevo.</p></div></div>;
+
+  if (enModoDiaD()) return (
+    <div className="min-h-screen bg-slate-50">
+      <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 shadow-lg"><div className="max-w-lg mx-auto flex items-center gap-3"><span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span><h1 className="text-sm font-black uppercase">{info.coordinador_nombre}</h1></div></header>
+      <main className="max-w-lg mx-auto p-4 mt-10"><div className="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-slate-800 text-center"><h2 className="text-xl font-black mb-2">🗳️ Carga cerrada</h2><p className="text-sm font-bold text-slate-500">El período de carga terminó (llegó el Día D). Cargaste {info.filas} personas. ¡Gracias por tu trabajo!</p></div></main>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">

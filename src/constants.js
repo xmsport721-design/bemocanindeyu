@@ -10,6 +10,14 @@ export const DISTRITOS_CONCEPCION = [
 
 export const NOMBRE_DEPARTAMENTO = "CONCEPCIÓN";
 
+// ── FASES ──
+// La carga de datos (registro, masiva, links de coordinador) está habilitada
+// hasta el 02-oct inclusive. Desde el 03-oct = "Modo Día D": solo consulta
+// (dirigentes, buscador Día D, veedor, escrutinio, métricas). Se cierra la carga
+// para no ensuciar el gráfico con cargas de último momento.
+export const FECHA_CIERRE_CARGA = new Date('2026-10-03T03:00:00Z'); // 03-oct 00:00 Paraguay (UTC-3)
+export const enModoDiaD = () => Date.now() >= FECHA_CIERRE_CARGA.getTime();
+
 // --- DICCIONARIO DE FOTOS LOCALES (claves normalizadas) ---
 export const FOTOS_LOCALES_CONCEJALES = {
   "FABIOPORTILLO": "/fotos/1-fabio_portillo.jpg",
