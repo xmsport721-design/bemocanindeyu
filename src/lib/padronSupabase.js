@@ -3,14 +3,19 @@
 // ============================================================================
 import { supabase } from "../supabase";
 
-// "¿Dónde vota fulano?" — 1 registro por cédula.
-// Vía RPC (SECURITY DEFINER) para NO depender del claim RLS del usuario.
+// "¿Dónde vota fulano?" — 1 registro por cédula, match EXACTO por PK (instantáneo).
+// Cache en memoria + teléfono: el padrón es estático, así no saturamos la base.
+const _cacheCedula = new Map();
 export async function buscarPadronPorCedula(cedula) {
   const ci = String(cedula || "").trim();
   if (!ci) return null;
-  const { data, error } = await supabase.rpc("buscar_padron", { q: ci, dist: null });
+  if (_cacheCedula.has(ci)) return _cacheCedula.get(ci);
+  try { const c = localStorage.getItem(`ped_${ci}`); if (c) { const p = JSON.parse(c); _cacheCedula.set(ci, p); return p; } } catch {}
+  const { data, error } = await supabase.rpc("padron_por_cedula", { ci });
   if (error) { console.error("Supabase padrón (cédula):", error.message); return null; }
-  return (data || []).find(r => String(r.cedula) === ci) || null;
+  const p = (data && data[0]) || null;
+  if (p) { _cacheCedula.set(ci, p); try { localStorage.setItem(`ped_${ci}`, JSON.stringify(p)); } catch {} }
+  return p;
 }
 
 // Cruzamiento masivo: dado un array de cédulas, devuelve las que figuran en el padrón (1 viaje).

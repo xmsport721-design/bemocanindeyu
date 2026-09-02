@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { UserPlus, Send, Loader, Search } from "lucide-react";
-import { cargaInfo, cargaAgregar, cargaEnviar } from "../lib/cargaCoordinador";
+import { cargaInfo, cargaAgregar, cargaEnviar, cargaValidar } from "../lib/cargaCoordinador";
 import { buscarPadronPorCedula } from "../lib/padronSupabase";
 import { enModoDiaD } from "../constants";
+
+const COLORES = [["VERDE","bg-green-500"],["AMARILLO","bg-yellow-500"],["ROJO","bg-red-500"]];
 
 // Página PÚBLICA (sin login) a la que entra el coordinador con su link único (?carga=TOKEN)
 export default function CargaPublica({ token }) {
@@ -15,9 +17,22 @@ export default function CargaPublica({ token }) {
   const [resultado, setResultado] = useState(null); // null | "NO" | {padron}
   const [buscando, setBuscando] = useState(false);
   const [telProv, setTelProv] = useState("");
+  const [acceso, setAcceso] = useState("");   // cédula validada (para escribir)
+  const [gateOk, setGateOk] = useState(false);
+  const [gateCi, setGateCi] = useState("");
+  const [validando, setValidando] = useState(false);
+  const [color, setColor] = useState("VERDE"); // se aplica a toda la carga
 
   const recargar = () => cargaInfo(token).then(setInfo).catch(() => setInfo(null));
   useEffect(() => { recargar(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const validarGate = async () => {
+    const ci = String(gateCi).trim(); if (!ci) return;
+    setValidando(true);
+    try { const ok = await cargaValidar(token, ci); if (ok) { setAcceso(ci); setGateOk(true); } else alert("Cédula incorrecta. Ingresá la cédula del coordinador."); }
+    catch (e) { alert("Error: " + (e.message || "")); }
+    setValidando(false);
+  };
 
   const parsear = () => texto.split(/\r?\n/).map(l => {
     const nums = l.match(/\d+/g) || [];
@@ -25,14 +40,14 @@ export default function CargaPublica({ token }) {
     const cedula = nums[0];
     const telefono = nums[1] && nums[1].length >= 6 ? nums[1] : "";
     const nombre = l.replace(/[\d,;]+/g, " ").replace(/\s+/g, " ").trim();
-    return { cedula, nombre, telefono, concejal: concejalSel || info?.concejal_fijo || "" };
+    return { cedula, nombre, telefono, concejal: concejalSel || info?.concejal_fijo || "", semaforo: color };
   }).filter(Boolean);
 
   const agregar = async () => {
     const filas = parsear();
     if (!filas.length) return alert("Pegá al menos una cédula (una por línea).");
     setGuardando(true);
-    try { const n = await cargaAgregar(token, filas); setTexto(""); await recargar(); alert(`✅ Agregados ${n}.`); }
+    try { const n = await cargaAgregar(token, filas, acceso); setTexto(""); await recargar(); alert(`✅ Agregados ${n} (${color}).`); }
     catch (e) { alert("⚠️ " + (e.message || "No se pudo agregar")); }
     setGuardando(false);
   };
@@ -50,7 +65,7 @@ export default function CargaPublica({ token }) {
     if (!resultado || resultado === "NO") return;
     setGuardando(true);
     try {
-      await cargaAgregar(token, [{ cedula: String(resultado.cedula), nombre: `${resultado.nombre} ${resultado.apellido}`.trim(), telefono: telProv, concejal: concejalSel || info?.concejal_fijo || "" }]);
+      await cargaAgregar(token, [{ cedula: String(resultado.cedula), nombre: `${resultado.nombre} ${resultado.apellido}`.trim(), telefono: telProv, concejal: concejalSel || info?.concejal_fijo || "", semaforo: color }], acceso);
       setResultado(null); setBuscarCi(""); setTelProv(""); await recargar();
     } catch (e) { alert("⚠️ " + (e.message || "No se pudo agregar")); }
     setGuardando(false);
@@ -58,7 +73,7 @@ export default function CargaPublica({ token }) {
 
   const enviar = async () => {
     setGuardando(true);
-    try { await cargaEnviar(token); await recargar(); alert("✅ Enviado al equipo. Podés seguir cargando más gente y volver a tocar ENVIAR cuando agregues. No cierres el link."); }
+    try { await cargaEnviar(token, acceso); await recargar(); alert("✅ Enviado al equipo. Podés seguir cargando más gente y volver a tocar ENVIAR cuando agregues. No cierres el link."); }
     catch (e) { alert("⚠️ " + (e.message || "No se pudo enviar")); }
     setGuardando(false);
   };
@@ -70,6 +85,18 @@ export default function CargaPublica({ token }) {
     <div className="min-h-screen bg-slate-50">
       <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 shadow-lg"><div className="max-w-lg mx-auto flex items-center gap-3"><span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span><h1 className="text-sm font-black uppercase">{info.coordinador_nombre}</h1></div></header>
       <main className="max-w-lg mx-auto p-4 mt-10"><div className="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-slate-800 text-center"><h2 className="text-xl font-black mb-2">🗳️ Carga cerrada</h2><p className="text-sm font-bold text-slate-500">El período de carga terminó (llegó el Día D). Cargaste {info.filas} personas. ¡Gracias por tu trabajo!</p></div></main>
+    </div>
+  );
+
+  if (info.req_cedula && !gateOk) return (
+    <div className="min-h-screen bg-slate-50">
+      <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-gradient-to-r from-red-700 to-red-900 text-white p-4 shadow-lg"><div className="max-w-lg mx-auto flex items-center gap-3"><span className="bg-white text-red-800 px-2 rounded font-black">BEMO</span><h1 className="text-sm font-black uppercase">{info.coordinador_nombre}</h1></div></header>
+      <main className="max-w-md mx-auto p-6 mt-16"><div className="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-red-600 text-center">
+        <h2 className="text-xl font-black mb-2">🔒 Acceso</h2>
+        <p className="text-xs font-bold text-slate-500 mb-5">Ingresá tu número de cédula (coordinador) para acceder a la carga.</p>
+        <input type="number" className="w-full p-4 border-2 rounded-xl text-center text-xl font-black mb-4 outline-none focus:border-red-500" value={gateCi} onChange={e=>setGateCi(e.target.value)} onKeyDown={e=>e.key==='Enter'&&validarGate()} placeholder="N° Cédula" />
+        <button onClick={validarGate} disabled={validando} className="w-full bg-red-700 hover:bg-red-800 text-white py-4 rounded-xl font-black disabled:opacity-50">{validando ? 'VERIFICANDO...' : 'ENTRAR'}</button>
+      </div></main>
     </div>
   );
 
@@ -85,6 +112,11 @@ export default function CargaPublica({ token }) {
       <main className="max-w-lg mx-auto p-4 mt-4">
           <div className="space-y-4">
           {info.estado !== "cargando" && <div className="bg-green-50 border border-green-200 rounded-2xl p-3 text-center"><p className="text-sm font-black text-green-700">✅ Ya enviaste {info.filas}. Podés seguir cargando más y volver a enviar.</p></div>}
+          <div className="bg-white p-4 rounded-3xl shadow-xl border">
+            <p className="text-xs font-black text-slate-500 uppercase mb-2 text-center">Color de esta carga</p>
+            <div className="grid grid-cols-3 gap-2">{COLORES.map(([c,bg])=>(<button key={c} onClick={()=>setColor(c)} className={`py-3 rounded-xl font-black text-white text-xs transition-all ${bg} ${color===c?'ring-4 ring-slate-800 scale-105':'opacity-50'}`}>{c}</button>))}</div>
+            <p className="text-[10px] font-bold text-slate-400 text-center mt-2">Todo lo que cargues ahora se envía como <b>{color}</b>.</p>
+          </div>
           <div className="bg-white p-6 rounded-3xl shadow-xl border">
             <h2 className="font-black text-lg mb-1 flex items-center gap-2"><Search className="text-red-600"/>Buscar por cédula</h2>
             <p className="text-xs text-slate-500 font-bold mb-3">Buscá la cédula, confirmá el nombre y agregalo. (Más rápido y seguro.)</p>

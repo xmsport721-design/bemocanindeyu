@@ -483,6 +483,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const [instMasivoResult, setInstMasivoResult] = useState(null);
     const [instMasivoCargando, setInstMasivoCargando] = useState(false);
     const [instMasivoGuardando, setInstMasivoGuardando] = useState(false);
+    const [instMasivoColor, setInstMasivoColor] = useState("VERDE");
 
     useEffect(() => {
         if (distritoFiltroMaster === "TODOS") { setInstCoords({}); return; }
@@ -513,7 +514,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
     const eliminarInstCoord = (key) => { if (window.confirm("¿Eliminar este coordinador institucional?")) remove(ref(db, `coordinadores_inst/${distritoFiltroMaster}/${key}`)); };
     const generarLinkInst = async (c) => {
         try {
-            const token = await cargaCrear({ distrito: distritoFiltroMaster, zona: c.zona, coordinador: `${c.institucion}: ${c.responsable}`, telefono: c.telefono, concejalFijo: `INST: ${c.institucion}`, concejales: configApp.concejales || [] });
+            const token = await cargaCrear({ distrito: distritoFiltroMaster, zona: c.zona, coordinador: `${c.institucion}: ${c.responsable}`, telefono: c.telefono, concejalFijo: `INST: ${c.institucion}`, concejales: configApp.concejales || [], coordinadorCedula: c.cedula });
             setInstLinks(prev => ({ ...prev, [c.key]: `${window.location.origin}/?carga=${token}` }));
             refrescarInstCargas();
         } catch (e) { alert("No se pudo crear el link. ¿Corriste el SQL Fase 3?\n" + (e.message || "")); }
@@ -530,7 +531,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
             filas.forEach(f => {
                 const p = encMap[String(f.cedula)]; if (!p || ya.has(String(f.cedula))) return;
                 const key = push(ref(db, 'votos_seguros')).key;
-                updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: telMap[String(f.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: "SIN ASIGNAR", coordinador: c.coordinador_nombre, institucion: String(c.coordinador_nombre || '').split(':')[0], semaforo: "VERDE", registradoPor: usuarioActivo?.email || "ADM", fecha: new Date().toLocaleString(), origen: "institucion_link" };
+                updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: telMap[String(f.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: "SIN ASIGNAR", coordinador: c.coordinador_nombre, institucion: String(c.coordinador_nombre || '').split(':')[0], semaforo: f.semaforo || "VERDE", registradoPor: usuarioActivo?.email || "ADM", fecha: new Date().toLocaleString(), origen: "institucion_link" };
                 n++;
             });
             if (n > 0) await update(ref(db, 'votos_seguros'), updates);
@@ -558,7 +559,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         instMasivoResult.encontrados.forEach(p => {
             if (ya.has(String(p.cedula))) return;
             const key = push(ref(db, 'votos_seguros')).key;
-            updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: "SIN ASIGNAR", coordinador: instMasivoCoord, institucion: String(instMasivoCoord).split(':')[0], semaforo: "VERDE", registradoPor: usuarioActivo?.email || "ADM", fecha: new Date().toLocaleString(), origen: "institucion_masiva" };
+            updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: "SIN ASIGNAR", coordinador: instMasivoCoord, institucion: String(instMasivoCoord).split(':')[0], semaforo: instMasivoColor, registradoPor: usuarioActivo?.email || "ADM", fecha: new Date().toLocaleString(), origen: "institucion_masiva" };
             n++;
         });
         if (n === 0) { setInstMasivoGuardando(false); return alert("Todos ya estaban cargados."); }
@@ -1549,6 +1550,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                             <p className="text-xs text-slate-500 font-bold mb-3">Pegá cédulas (una por línea), cruzamos con el padrón y cargamos al coordinador elegido.</p>
                             <select value={instMasivoCoord} onChange={e=>setInstMasivoCoord(e.target.value)} className="w-full p-3 border-2 rounded-xl font-bold outline-none mb-2"><option value="">ELEGÍ COORDINADOR/INSTITUCIÓN...</option>{instLista.map(c=><option key={c.key} value={`${c.institucion}: ${c.responsable}`}>{c.institucion}: {c.responsable}</option>)}</select>
                             <textarea rows={5} placeholder={"1234567\n7654321"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none mb-2" value={instMasivoTexto} onChange={e=>setInstMasivoTexto(e.target.value)} />
+                            <div className="mb-2"><p className="text-[10px] font-black text-slate-500 uppercase mb-1">Color de esta carga</p><div className="grid grid-cols-3 gap-2">{[["VERDE","bg-green-500"],["AMARILLO","bg-yellow-500"],["ROJO","bg-red-500"]].map(([c,bg])=>(<button key={c} onClick={()=>setInstMasivoColor(c)} className={`py-2 rounded-lg font-black text-white text-[11px] transition-all ${bg} ${instMasivoColor===c?'ring-2 ring-slate-800':'opacity-50'}`}>{c}</button>))}</div></div>
                             <button onClick={cruzarInstMasivo} disabled={instMasivoCargando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black disabled:opacity-50">{instMasivoCargando?'CRUZANDO...':'CRUZAR CON PADRÓN'}</button>
                             {instMasivoResult && (<div className="mt-3 bg-slate-50 border rounded-2xl p-3"><div className="flex gap-3 mb-2 flex-wrap"><span className="bg-green-100 text-green-800 font-black px-3 py-1 rounded-full text-sm">✅ {instMasivoResult.encontrados.length}</span>{instMasivoResult.noEncontrados.length>0 && <span className="bg-red-100 text-red-700 font-black px-3 py-1 rounded-full text-sm">❌ {instMasivoResult.noEncontrados.length}</span>}</div><div className="max-h-40 overflow-y-auto text-xs space-y-1 mb-2">{instMasivoResult.encontrados.map(p=>(<div key={p.cedula} className="flex justify-between items-center bg-white border rounded px-2 py-1 gap-2"><span className="font-bold truncate">{p.nombre} {p.apellido}</span><span className="flex items-center gap-2 shrink-0"><span className="text-slate-400 text-[10px]">CI {p.cedula}</span><button onClick={()=>setInstMasivoResult(r=>({...r, encontrados: r.encontrados.filter(x=>String(x.cedula)!==String(p.cedula))}))} className="text-red-400 font-black">✕</button></span></div>))}</div><button onClick={cargarInstMasivo} disabled={instMasivoGuardando||!instMasivoResult.encontrados.length} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black disabled:opacity-50">{instMasivoGuardando?'CARGANDO...':`CARGAR ${instMasivoResult.encontrados.length}`}</button></div>)}
                         </div>

@@ -68,6 +68,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [masivoCargando, setMasivoCargando] = useState(false);
     const [masivoResult, setMasivoResult] = useState(null); // { encontrados:[], noEncontrados:[], telMap:{} }
     const [masivoGuardando, setMasivoGuardando] = useState(false);
+    const [masivoColor, setMasivoColor] = useState("VERDE"); // color para toda la carga masiva
 
     // Coordinador fijado (carga rápida de su lista)
     const [coordFijo, setCoordFijo] = useState("");
@@ -281,7 +282,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         masivoResult.encontrados.forEach(p => {
             if (yaMios.has(String(p.cedula))) { saltados++; return; }
             const key = push(ref(db, 'votos_seguros')).key;
-            updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: masivoResult.telMap[String(p.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: miNom, coordinador: coord, semaforo: "VERDE", registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), origen: "carga_masiva" };
+            updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: masivoResult.telMap[String(p.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: miNom, coordinador: coord, semaforo: masivoColor, registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), origen: "carga_masiva" };
             cargados++;
         });
         if (cargados === 0) { setMasivoGuardando(false); return alert("Todos ya estaban cargados."); }
@@ -343,7 +344,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
 
     const generarLinkPara = async (c) => {
         try {
-            const token = await cargaCrear({ distrito: perfil.distrito, zona: c.zona, coordinador: c.nombre, telefono: c.telefono, concejalFijo: miNom, concejales: configApp.concejales || [] });
+            const token = await cargaCrear({ distrito: perfil.distrito, zona: c.zona, coordinador: c.nombre, telefono: c.telefono, concejalFijo: miNom, concejales: configApp.concejales || [], coordinadorCedula: c.cedula });
             setLinksGenerados(prev => ({ ...prev, [c.nombre]: `${window.location.origin}/?carga=${token}` }));
             refrescarCargas();
         } catch (e) { alert("No se pudo crear el link. ¿Corriste el SQL de la Fase 3?\n" + (e.message || "")); }
@@ -362,7 +363,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                 const p = encMap[String(f.cedula)];
                 if (!p || yaMios.has(String(f.cedula))) return;
                 const key = push(ref(db, 'votos_seguros')).key;
-                updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: telMap[String(f.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: (f.concejal && f.concejal !== "") ? f.concejal : miNom, coordinador: c.coordinador_nombre, semaforo: "VERDE", registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), origen: "link_coordinador" };
+                updates[key] = { cedula: String(p.cedula), nombre: p.nombre, apellido: p.apellido, telefono: telMap[String(f.cedula)] || "", distrito: p.distrito, cod_local: p.cod_local, local: p.local, mesa: p.mesa, orden: p.orden, concejal: (f.concejal && f.concejal !== "") ? f.concejal : miNom, coordinador: c.coordinador_nombre, semaforo: f.semaforo || "VERDE", registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), origen: "link_coordinador" };
                 n++;
             });
             if (n > 0) await update(ref(db, 'votos_seguros'), updates);
@@ -599,6 +600,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                             </div>
                             <datalist id="coordListMasivo">{coordNombres.map(c=><option key={c} value={c}/>)}</datalist>
                             <textarea rows={5} placeholder={"7684189\n1234567, 0981123456"} className="w-full p-3 border-2 rounded-xl font-mono text-sm outline-none focus:border-emerald-500 mb-3" value={masivoTexto} onChange={e=>setMasivoTexto(e.target.value)} />
+                            <div className="mb-3"><p className="text-[10px] font-black text-slate-500 uppercase mb-1">Color de esta carga</p><div className="grid grid-cols-3 gap-2">{[["VERDE","bg-green-500"],["AMARILLO","bg-yellow-500"],["ROJO","bg-red-500"]].map(([c,bg])=>(<button key={c} onClick={()=>setMasivoColor(c)} className={`py-2 rounded-lg font-black text-white text-[11px] transition-all ${bg} ${masivoColor===c?'ring-2 ring-slate-800':'opacity-50'}`}>{c}</button>))}</div></div>
                             <button onClick={cruzarMasivo} disabled={masivoCargando} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-black transition-colors disabled:opacity-50">{masivoCargando ? "CRUZANDO CON PADRÓN..." : "CRUZAR CON PADRÓN"}</button>
 
                             {masivoResult && (
