@@ -85,6 +85,22 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
         return new Set(Object.entries(m).filter(([, s]) => s.size > 1).map(([c]) => c));
     }, [votosFiltrados]);
 
+    // Coordinadores que trabajan con 2+ concejales (deberían trabajar con 1). Con detalle de quiénes.
+    const coordinadoresDuplicados = useMemo(() => {
+        const m = {};
+        (votosFiltrados || []).forEach(v => {
+            if (!v.coordinador) return;
+            const cj = v.concejal && v.concejal !== "SIN ASIGNAR" ? v.concejal : null;
+            if (!cj) return;
+            (m[v.coordinador] = m[v.coordinador] || {});
+            m[v.coordinador][cj] = (m[v.coordinador][cj] || 0) + 1;
+        });
+        return Object.entries(m)
+            .map(([coord, cjs]) => ({ coord, concejales: Object.entries(cjs).map(([cj, n]) => ({ cj: cj.includes(' - ') ? cj.split(' - ')[1].trim() : cj, n })).sort((a, b) => b.n - a.n) }))
+            .filter(x => x.concejales.length > 1)
+            .sort((a, b) => b.concejales.length - a.concejales.length);
+    }, [votosFiltrados]);
+
     const reporteConcejales = useMemo(() => {
         const hoy = new Date().toLocaleDateString();
         return (configApp.concejales || []).filter(c => c !== "SIN ASIGNAR").map(c => {
@@ -918,9 +934,28 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                     distritoFiltroMaster === "TODOS" ? (
                         <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Para detectar choques de carga, debes seleccionar un distrito en el menú superior.</p></div>
                     ) : (
-                    <div className="bg-white p-6 rounded-2xl shadow border animate-fade-in">
-                        <h2 className="font-black text-xl mb-4 text-red-600 flex items-center gap-2"><AlertTriangle/> AUDITORÍA DE CHOQUES ({distritoFiltroMaster})</h2>
-                        <p className="text-sm text-gray-600 mb-6 font-bold">Estas personas fueron registradas por más de un candidato en esta ciudad. El sistema ya las ha marcado automáticamente en ROJO.</p>
+                    <div className="space-y-6 animate-fade-in">
+                    <div className="bg-white p-6 rounded-2xl shadow border">
+                        <h2 className="font-black text-xl mb-1 text-orange-600 flex items-center gap-2"><AlertTriangle/> COORDINADORES DUPLICADOS ({distritoFiltroMaster})</h2>
+                        <p className="text-sm text-gray-600 mb-4 font-bold">Un coordinador debería trabajar con UN solo concejal. Estos figuran con 2 o más — el sistema deja cargar, pero quedan marcados acá para revisar.</p>
+                        {coordinadoresDuplicados.length === 0 ? (
+                            <div className="bg-green-50 text-green-700 p-4 rounded-xl font-black text-center">✅ Ningún coordinador compartido entre concejales.</div>
+                        ) : (
+                            <div className="space-y-3">
+                                {coordinadoresDuplicados.map(c => (
+                                    <div key={c.coord} className="border-2 border-orange-200 rounded-xl p-3 bg-orange-50/50">
+                                        <div className="flex justify-between items-center mb-2 gap-2"><div className="font-black uppercase text-slate-800 truncate">👤 {c.coord}</div><span className="text-[11px] font-black text-orange-700 bg-orange-100 px-2 py-0.5 rounded shrink-0">{c.concejales.length} concejales</span></div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {c.concejales.map(x=>(<span key={x.cj} className="text-[11px] font-bold bg-white border rounded-lg px-2 py-1 uppercase">⭐ {x.cj} <b className="text-orange-700">({x.n})</b></span>))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow border">
+                        <h2 className="font-black text-xl mb-4 text-red-600 flex items-center gap-2"><AlertTriangle/> ELECTORES DUPLICADOS ({distritoFiltroMaster})</h2>
+                        <p className="text-sm text-gray-600 mb-6 font-bold">Estas personas fueron registradas por más de un candidato. El sistema ya las marcó automáticamente en ROJO (cuentan como 1).</p>
                         {choquesDetectados.length === 0 ? (
                             <div className="bg-green-50 text-green-700 p-4 rounded-xl font-black text-center">✅ Sistema limpio en {distritoFiltroMaster}. No hay choques detectados.</div>
                         ) : (
@@ -945,6 +980,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                 ))}
                             </div>
                         )}
+                    </div>
                     </div>
                     )
                 )}
