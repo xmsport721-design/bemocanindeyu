@@ -10,6 +10,12 @@ export default function AppVeedor({ mesasCerradas, asignacionesVeedores, escruti
     const [ciIn, setCiIn] = useState("");
     const [fMesa, setFMesa] = useState("");
     const [vista, setVista] = useState("pintar"); // pintar | votaron | acta
+    const [online, setOnline] = useState(true);   // conexión real a Firebase
+
+    useEffect(() => {
+        const un = onValue(ref(db, ".info/connected"), snap => setOnline(snap.val() === true));
+        return () => un();
+    }, [db]);
 
     // Pintado robusto: marca optimista local (instantánea) + votos reales de la mesa (RTDB, tiempo real)
     const [votosMesa, setVotosMesa] = useState({});     // llave -> data (solo esta mesa)
@@ -61,6 +67,14 @@ export default function AppVeedor({ mesasCerradas, asignacionesVeedores, escruti
     // ROBUSTO: guarda el acta con respaldo local + envío en 2do plano.
     // Firebase encola y reintenta solo hasta confirmar (no se traba, no se pierde).
     const guardarActa = () => {
+        const inten = parseInt(fEsc.intendente) || 0;
+        const sumaConc = Object.values(fEsc.concejales || {}).reduce((s, n) => s + (parseInt(n) || 0), 0);
+        const bl = parseInt(fEsc.blancos) || 0, nu = parseInt(fEsc.nulos) || 0;
+        const resumen = `RESUMEN DEL ACTA · MESA ${vs.mesa}\n\n` +
+            `Intendente (${configApp.intendente || 'S/D'}): ${inten}\n` +
+            `Concejales (suma): ${sumaConc}\n` +
+            `Blancos: ${bl}\nNulos: ${nu}\n\n¿Enviar estos datos al sistema?`;
+        if (!window.confirm(resumen)) return;
         const data = { ...fEsc, timestamp: Date.now(), cargadoPor: vs.nombre };
         try { localStorage.setItem(`acta_pend_${llMA}`, JSON.stringify(data)); } catch {}
         set(ref(db, `dia_d/escrutinio/${llMA}`), data)
@@ -89,6 +103,7 @@ export default function AppVeedor({ mesasCerradas, asignacionesVeedores, escruti
 
     // Pintado: marca instantánea (no se traba) + guarda en RTDB en segundo plano
     const pintar = (v) => {
+        try { if (navigator.vibrate) navigator.vibrate(40); } catch {}
         const yaVoto = estaMarcado(v.orden);
         const llV = generarLlave(vs.distrito, vs.cod_local, vs.mesa, v.orden);
         setMarcadosLocal(prev => ({ ...prev, [v.orden]: !yaVoto }));   // 1) instantáneo
@@ -114,7 +129,7 @@ export default function AppVeedor({ mesasCerradas, asignacionesVeedores, escruti
 
     return (
         <div className="min-h-screen pb-20 bg-slate-50">
-          <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-xl border-b-4 border-red-600 sticky top-0 z-50"><div className="flex items-center gap-3"><span className="bg-red-700 px-2 rounded font-black">BEMO</span><div><h1 className="text-sm font-bold uppercase truncate">{vs?.local || configApp.intendente || "S/D"}</h1><p className="text-[10px] text-gray-400 font-bold uppercase">MESA: {vs?.mesa||'-'}</p></div></div><button onClick={()=>{localStorage.removeItem('veedor_bemo_sesion'); signOut(auth);}} className="text-[10px] bg-red-600 px-3 py-1.5 rounded-full font-black">SALIR</button></header>
+          <header style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }} className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-xl border-b-4 border-red-600 sticky top-0 z-50"><div className="flex items-center gap-3"><span className="bg-red-700 px-2 rounded font-black">BEMO</span><div><h1 className="text-sm font-bold uppercase truncate">{vs?.local || configApp.intendente || "S/D"}</h1><p className="text-[10px] text-gray-400 font-bold uppercase">MESA: {vs?.mesa||'-'}</p></div></div><div className="flex items-center gap-2">{vs && <span className={`text-[9px] font-black px-2 py-1 rounded-full flex items-center gap-1 ${online?'bg-green-500/20 text-green-300':'bg-red-500/30 text-red-200 animate-pulse'}`}><span className={`w-2 h-2 rounded-full ${online?'bg-green-400':'bg-red-400'}`}></span>{online?'EN LÍNEA':'SIN SEÑAL'}</span>}<button onClick={()=>{localStorage.removeItem('veedor_bemo_sesion'); signOut(auth);}} className="text-[10px] bg-red-600 px-3 py-1.5 rounded-full font-black">SALIR</button></div></header>
 
           {!vs ? (
             <div className="p-6 max-w-md mx-auto mt-10 bg-white rounded-3xl shadow-xl"><h2 className="text-xl font-black mb-4 text-center">CÉDULA VEEDOR</h2><input type="number" className="w-full p-4 border-2 rounded-xl text-center text-xl font-black mb-4" value={ciIn} onChange={e=>setCiIn(e.target.value)} /><button onClick={()=>{const a=Object.values(asignacionesVeedores||{}).find(x=>String(x.ci)===String(ciIn)); if(a){setVs(a); localStorage.setItem('veedor_bemo_sesion',JSON.stringify(a)); set(ref(db,`dia_d/veedores_online/${a.ci}`),true);} else alert("No asignado.");}} className="w-full bg-slate-900 text-white py-4 rounded-xl font-black">ENTRAR</button></div>
