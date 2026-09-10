@@ -342,6 +342,56 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         }
     };
 
+    // Imprime la hoja del coordinador: carátula con sus datos + electores agrupados por local
+    const imprimirCoordinador = (coordNombre) => {
+        const meta = coordMeta[normalizarNombre(coordNombre)] || {};
+        const suyos = misV.filter(v => (v.coordinador || 'SIN COORDINADOR') === coordNombre);
+        const porLoc = {};
+        suyos.forEach(v => { const l = v.local || 'SIN LOCAL'; (porLoc[l] = porLoc[l] || []).push(v); });
+        const locales = Object.entries(porLoc)
+            .map(([local, arr]) => ({ local, arr: arr.sort((a, b) => (parseInt(a.mesa) || 0) - (parseInt(b.mesa) || 0) || (parseInt(a.orden) || 0) - (parseInt(b.orden) || 0)) }))
+            .sort((a, b) => b.arr.length - a.arr.length);
+        const concejalCorto = miNom.includes('-') ? miNom.split('-')[1].trim() : miNom;
+        const esc = (s) => String(s == null ? '' : s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+        const secciones = locales.map(({ local, arr }) => `
+            <h2>${esc(local)} <span class="cnt">${arr.length} votantes</span></h2>
+            <table><thead><tr><th>#</th><th>Nombre y Apellido</th><th>C.I</th><th>Mesa</th><th>Orden</th></tr></thead><tbody>
+            ${arr.map((v, i) => `<tr><td>${i + 1}</td><td>${esc(v.nombre)} ${esc(v.apellido)}</td><td>${esc(v.cedula)}</td><td>${esc(v.mesa) || '-'}</td><td>${esc(v.orden) || '-'}</td></tr>`).join('')}
+            </tbody></table>`).join('');
+        const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Coordinador ${esc(coordNombre)}</title>
+        <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;padding:24px;}
+        .car{border:3px solid #991e1e;border-radius:12px;padding:20px;margin-bottom:20px;}
+        .car h1{color:#991e1e;margin:0 0 4px;font-size:20px;} .car .cn{font-size:22px;font-weight:900;margin:6px 0 12px;text-transform:uppercase;}
+        .row{display:flex;flex-wrap:wrap;gap:10px;font-size:13px;font-weight:bold;}
+        .row span{background:#f3f4f6;padding:6px 12px;border-radius:8px;}
+        h2{background:#111;color:#fff;padding:8px 12px;border-radius:8px;margin:18px 0 6px;font-size:15px;display:flex;justify-content:space-between;align-items:center;}
+        .cnt{background:#991e1e;padding:2px 12px;border-radius:20px;font-size:13px;}
+        table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px;}
+        th,td{border:1px solid #ddd;padding:5px 8px;text-align:left;} th{background:#f3f4f6;}
+        tr:nth-child(even){background:#fafafa;} @media print{body{padding:0;} h2{break-inside:avoid;}}</style></head>
+        <body>
+        <div class="car">
+            <h1>🗳️ BEMO — ELECCIONES MUNICIPALES 2026</h1>
+            <div class="cn">COORDINADOR: ${esc(coordNombre)}</div>
+            <div class="row">
+                <span>📞 Tel: ${esc(meta.telefono) || '—'}</span>
+                <span>📍 Zona: ${esc(meta.zona) || '—'}</span>
+                <span>🏘️ Localidad: ${esc(meta.localidad) || '—'}</span>
+                <span>C.I: ${esc(meta.cedula) || '—'}</span>
+                <span>⭐ Concejal: ${esc(concejalCorto)}</span>
+                <span>Distrito: ${esc(perfil.distrito)}</span>
+                <span>👥 Total votantes: <b>${suyos.length}</b></span>
+                <span>🏫 Locales: <b>${locales.length}</b></span>
+            </div>
+        </div>
+        ${secciones || '<p style="text-align:center;color:#888;font-weight:bold;padding:40px;">Este coordinador no tiene votantes cargados.</p>'}
+        <script>window.onload=function(){setTimeout(function(){window.print();},300);}</script>
+        </body></html>`;
+        const w = window.open('', '_blank');
+        if (!w) return alert('Permití las ventanas emergentes para imprimir/guardar el PDF.');
+        w.document.write(html); w.document.close();
+    };
+
     const generarLinkPara = async (c) => {
         try {
             const token = await cargaCrear({ distrito: perfil.distrito, zona: c.zona, coordinador: c.nombre, telefono: c.telefono, concejalFijo: miNom, concejales: configApp.concejales || [], coordinadorCedula: c.cedula });
@@ -774,6 +824,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                                                 <div className="text-[10px] font-bold text-slate-400 truncate">{c.cedula?`CI ${c.cedula} · `:''}{c.localidad||''} {c.zona?`· ${c.zona}`:''}{c.telefono?` · 📞 ${c.telefono}`:''}</div>
                                             </div>
                                             <div className="flex gap-2 shrink-0">
+                                                <button onClick={()=>imprimirCoordinador(c.nombre)} title="Imprimir hoja del coordinador" className="bg-slate-100 text-slate-700 hover:bg-slate-200 p-2 rounded-lg"><Printer size={15}/></button>
                                                 <button onClick={()=>generarLinkPara(c)} className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg font-black text-xs flex items-center gap-1"><Send size={14}/> LINK</button>
                                                 <button onClick={()=>quitarCoordinador(c)} title="Eliminar coordinador" className="bg-red-100 text-red-600 hover:bg-red-200 p-2 rounded-lg"><Trash2 size={16}/></button>
                                             </div>
@@ -912,7 +963,7 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
             {coordSel && (
                 <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={()=>setCoordSel(null)}>
                     <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
-                        <div className="p-4 border-b flex justify-between items-center bg-slate-50"><div className="min-w-0"><h3 className="font-black uppercase truncate">{coordSel.coordinador}</h3><p className="text-[11px] font-bold text-slate-500">{coordSel.total} cargas · {coordSel.votaron} votaron</p></div><button onClick={()=>setCoordSel(null)} className="p-1 text-slate-400"><X size={22}/></button></div>
+                        <div className="p-4 border-b flex justify-between items-center bg-slate-50 gap-2"><div className="min-w-0"><h3 className="font-black uppercase truncate">{coordSel.coordinador}</h3><p className="text-[11px] font-bold text-slate-500">{coordSel.total} cargas · {coordSel.votaron} votaron</p></div><div className="flex items-center gap-2 shrink-0"><button onClick={()=>imprimirCoordinador(coordSel.coordinador)} className="bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-black px-3 py-1.5 rounded-lg flex items-center gap-1"><Printer size={14}/> IMPRIMIR</button><button onClick={()=>setCoordSel(null)} className="p-1 text-slate-400"><X size={22}/></button></div></div>
                         <div className="p-4 overflow-y-auto">
                             <h4 className="text-[11px] font-black uppercase text-slate-400 mb-2">Locales donde votan</h4>
                             <div className="flex flex-wrap gap-1 mb-4">{coordSel.localesTop.map(l=><span key={l.local} className="text-[10px] font-bold bg-slate-100 border rounded px-2 py-1 flex items-center gap-1"><MapPin size={10} className="text-red-400"/>{l.local} <b>{l.n}</b></span>)}</div>
