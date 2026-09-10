@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ref, set, remove, onValue, push, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle, Send, Edit2 } from "lucide-react";
+import { LogOut, CheckCircle, Users, Search, BarChart3, Bell, UserPlus, UserSquare2, Printer, Trash2, LayoutDashboard, Trophy, MapPin, Target, Pin, Upload, Monitor, Menu, X, RefreshCw, ChevronRight, AlertTriangle, Send, Edit2, Star } from "lucide-react";
 import { concejalCoincide, normalizarNombre, imprimirCarnetFisico, enviarWhatsAppCarnet } from "../lib/helpers";
 import { FOTOS_LOCALES_CONCEJALES, enModoDiaD } from "../constants";
 import { generarLlave } from "../lib/llaves";
@@ -74,6 +74,15 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
     const [coordFijo, setCoordFijo] = useState("");
     const [coordMeta, setCoordMeta] = useState({}); // { normalizado: {nombre, cedula, telefono, localidad, zona} }
 
+    // JUVENTUD (exclusivo del concejal): meta 100, jefes de juventud + jóvenes
+    const META_JUVENTUD = 100;
+    const [jefesJuv, setJefesJuv] = useState({});
+    const [jefeForm, setJefeForm] = useState({ cedula: "", nombre: "", localidad: "", telefono: "" });
+    const [jefeBuscando, setJefeBuscando] = useState(false);
+    const [juvForm, setJuvForm] = useState({ cedula: "", jefe: "", localidad: "", telefono: "" });
+    const [juvResult, setJuvResult] = useState(null); // null | "NO" | "OTRO" | {padron}
+    const [juvBuscando, setJuvBuscando] = useState(false);
+
     // Coordinadores se crean en LINK COORDINADOR (con cédula + localidad + zona)
     const [coordForm, setCoordForm] = useState({ cedula: "", nombre: "", telefono: "", localidad: "", zona: "URBANA" });
     const [coordBuscando, setCoordBuscando] = useState(false);
@@ -98,6 +107,16 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         misV.forEach(v => { if (v.coordinador) s.add(v.coordinador); });
         return [...s].filter(Boolean).sort();
     }, [coordinadoresLista, misV]);
+
+    // Jefes de juventud (propios del concejal) + lista de jóvenes (votos con juventud=true, únicos)
+    const misJefesPath = `jefes_juventud/${perfil.distrito}/${normalizarNombre(miNom)}`;
+    useEffect(() => { const un = onValue(ref(db, misJefesPath), snap => setJefesJuv(snap.val() || {})); return () => un(); }, [db, misJefesPath]);
+    const misJefes = useMemo(() => Object.values(jefesJuv || {}).filter(j => j && j.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre)), [jefesJuv]);
+    const juventudMios = useMemo(() => {
+        const seen = new Set(); const out = [];
+        misV.forEach(v => { if (v.juventud) { const k = String(v.cedula); if (!seen.has(k)) { seen.add(k); out.push(v); } } });
+        return out;
+    }, [misV]);
 
     // DEDUP: una cédula vale UNO para la meta (aunque esté cargada 2+ veces)
     const misVUnicos = useMemo(() => {
@@ -424,6 +443,50 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         setImportando("");
     };
 
+    // ── JUVENTUD ──
+    const buscarJefeCedula = async () => {
+        const ci = String(jefeForm.cedula).trim(); if (!ci) return;
+        setJefeBuscando(true);
+        const p = await buscarPadronPorCedula(ci);
+        if (p) setJefeForm(f => ({ ...f, nombre: `${p.nombre} ${p.apellido}`.trim(), localidad: f.localidad || p.local || "" }));
+        else alert("Cédula no encontrada (podés escribir el nombre a mano).");
+        setJefeBuscando(false);
+    };
+    const guardarJefe = () => {
+        const ci = String(jefeForm.cedula).trim(); const nom = String(jefeForm.nombre).trim().toUpperCase();
+        if (!ci || !nom) return alert("Cédula y nombre del jefe de juventud.");
+        if (!misJefes.some(j => String(j.cedula) === ci) && misJefes.length >= 10) return alert("Máximo 10 jefes de juventud.");
+        set(ref(db, `${misJefesPath}/${ci}`), { cedula: ci, nombre: nom, localidad: jefeForm.localidad, telefono: jefeForm.telefono, concejal: miNom, ts: Date.now() })
+            .then(() => setJefeForm({ cedula: "", nombre: "", localidad: "", telefono: "" })).catch(() => alert("No se pudo guardar."));
+    };
+    const quitarJefe = (ci) => { if (window.confirm("¿Quitar jefe de juventud?")) remove(ref(db, `${misJefesPath}/${ci}`)); };
+
+    const buscarJuvCedula = async () => {
+        const ci = String(juvForm.cedula).trim(); if (!ci) return;
+        setJuvBuscando(true); setJuvResult(null);
+        const p = await buscarPadronPorCedula(ci);
+        if (p && p.distrito === perfil.distrito) setJuvResult(p);
+        else if (p) setJuvResult("OTRO");
+        else setJuvResult("NO");
+        setJuvBuscando(false);
+    };
+    const guardarJuventud = () => {
+        if (!juvResult || juvResult === "NO" || juvResult === "OTRO") return;
+        const ci = String(juvResult.cedula);
+        const yaMio = misV.find(v => String(v.cedula) === ci);
+        const yaJuv = juventudMios.some(v => String(v.cedula) === ci);
+        if (yaJuv) return alert("Ese joven ya está en tu lista de juventud.");
+        if (!yaMio && juventudMios.length >= META_JUVENTUD) { if (!window.confirm(`Ya llegaste a la meta de ${META_JUVENTUD}. ¿Cargar igual?`)) return; }
+        const datos = { juventud: true, jefeJuventud: juvForm.jefe || "", localidad: juvForm.localidad || "", telefono: juvForm.telefono || (yaMio ? yaMio.telefono : "") || "" };
+        if (yaMio) {
+            update(ref(db, `votos_seguros/${yaMio.id}`), datos).then(() => { setJuvResult(null); setJuvForm(f => ({ cedula: "", jefe: f.jefe, localidad: "", telefono: "" })); alert("✅ Marcado como JUVENTUD (ya estaba en tu lista)."); }).catch(() => alert("No se pudo."));
+        } else {
+            push(ref(db, 'votos_seguros'), { cedula: ci, nombre: juvResult.nombre, apellido: juvResult.apellido, distrito: juvResult.distrito, cod_local: juvResult.cod_local, local: juvResult.local, mesa: juvResult.mesa, orden: juvResult.orden, concejal: miNom, coordinador: "", semaforo: "VERDE", registradoPor: usuarioActivo.email, fecha: new Date().toLocaleString(), ...datos });
+            setJuvResult(null); setJuvForm(f => ({ cedula: "", jefe: f.jefe, localidad: "", telefono: "" })); alert("✅ Joven cargado.");
+        }
+    };
+    const quitarJuventud = (v) => { if (window.confirm("¿Sacar de juventud? (el voto sigue en tu lista general)")) update(ref(db, `votos_seguros/${v.id}`), { juventud: false, jefeJuventud: "" }); };
+
     const handleRegistrarConcejal = () => {
         import('firebase/database').then(({ push, ref }) => {
             if(!form.cedula||!form.nombre)return alert("Datos incompletos");
@@ -447,7 +510,8 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
         { id: "live", label: "LIVE", icon: Bell },
         { id: "dirigentes", label: "MIS DIRIGENTES", icon: UserPlus },
         { id: "carga_link", label: "LINK COORDINADOR", icon: Send },
-    ].filter(n => !modoDiaD || (n.id !== "registro" && n.id !== "carga_link"));
+        { id: "juventud", label: "JUVENTUD", icon: Star },
+    ].filter(n => !modoDiaD || (n.id !== "registro" && n.id !== "carga_link" && n.id !== "juventud"));
     const irA = (id) => { setTab(id); setSidebarOpen(false); };
 
     return (
@@ -795,6 +859,58 @@ export default function AppConcejal({ perfil, votosSeguros, yaVotaronGlobal, pas
                         </div>
                     </div>
                 )}
+                {tab === "juventud" && (
+                    <div className="animate-fade-in max-w-2xl mx-auto space-y-5">
+                        <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-xl">
+                            <div className="flex items-center gap-2 mb-3"><Star size={20} className="text-yellow-400"/><h2 className="font-black text-lg uppercase">Juventud · Meta {META_JUVENTUD}</h2></div>
+                            <div className="flex items-end gap-3 mb-2"><span className="text-5xl font-black text-yellow-400 leading-none">{juventudMios.length}</span><span className="text-slate-400 font-black mb-1">/ {META_JUVENTUD}</span></div>
+                            <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden"><div className="bg-yellow-400 h-3 transition-all" style={{width:`${Math.min(100,Math.round(juventudMios.length/META_JUVENTUD*100))}%`}}></div></div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <div className="flex items-center justify-between mb-1"><h3 className="font-black text-sm uppercase text-slate-700 flex items-center gap-2"><UserPlus size={16} className="text-yellow-500"/> Jefes de juventud</h3><span className={`text-xs font-black px-2 py-1 rounded-full ${misJefes.length>=10?'bg-red-100 text-red-700':'bg-yellow-100 text-yellow-700'}`}>{misJefes.length}/10</span></div>
+                            <p className="text-[11px] text-slate-500 font-bold mb-3">Hasta 10 jefes con sus datos. Después asignás cada joven a un jefe.</p>
+                            <div className="flex gap-2 mb-2"><input type="number" placeholder="Cédula del jefe" className="flex-1 p-3 border-2 rounded-xl font-bold text-center outline-none" value={jefeForm.cedula} onChange={e=>setJefeForm({...jefeForm, cedula:e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarJefeCedula()}/><button onClick={buscarJefeCedula} disabled={jefeBuscando} className="bg-slate-800 text-white px-5 rounded-xl font-black disabled:opacity-50">{jefeBuscando?'...':<Search size={18}/>}</button></div>
+                            <input type="text" placeholder="Nombre y apellido" className="w-full p-3 border-2 rounded-xl font-bold uppercase outline-none mb-2" value={jefeForm.nombre} onChange={e=>setJefeForm({...jefeForm, nombre:e.target.value.toUpperCase()})}/>
+                            <div className="grid grid-cols-2 gap-2 mb-2"><input type="text" placeholder="Localidad" className="p-3 border-2 rounded-xl font-bold uppercase outline-none" value={jefeForm.localidad} onChange={e=>setJefeForm({...jefeForm, localidad:e.target.value.toUpperCase()})}/><input type="text" placeholder="Teléfono" className="p-3 border-2 border-blue-200 rounded-xl font-bold outline-none" value={jefeForm.telefono} onChange={e=>setJefeForm({...jefeForm, telefono:e.target.value})}/></div>
+                            <button onClick={guardarJefe} disabled={misJefes.length>=10} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2.5 rounded-xl font-black disabled:opacity-50">+ AGREGAR JEFE</button>
+                            <div className="space-y-1 mt-3">{misJefes.map(j=>(<div key={j.cedula} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{j.nombre}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {j.cedula}{j.localidad?` · ${j.localidad}`:''}{j.telefono?` · 📞 ${j.telefono}`:''} · 👥 {juventudMios.filter(v=>v.jefeJuventud===j.nombre).length}</div></div><button onClick={()=>quitarJefe(j.cedula)} className="text-red-500 bg-red-100 hover:bg-red-200 p-1.5 rounded-lg shrink-0"><Trash2 size={14}/></button></div>))}</div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black text-sm uppercase text-slate-700 mb-1 flex items-center gap-2"><Search size={16} className="text-yellow-500"/> Cargar joven</h3>
+                            <p className="text-[11px] text-slate-500 font-bold mb-3">Buscá por cédula. Si ya está en tu lista, se marca como juventud (no duplica).</p>
+                            <div className="flex gap-2 mb-2"><input type="number" placeholder="Cédula del joven" className="flex-1 p-3 border-2 rounded-xl font-bold text-center outline-none" value={juvForm.cedula} onChange={e=>setJuvForm({...juvForm, cedula:e.target.value})} onKeyDown={e=>e.key==='Enter'&&buscarJuvCedula()}/><button onClick={buscarJuvCedula} disabled={juvBuscando} className="bg-slate-800 text-white px-5 rounded-xl font-black disabled:opacity-50">{juvBuscando?'...':<Search size={18}/>}</button></div>
+                            {juvResult==="NO" && <div className="p-3 bg-red-50 text-red-600 font-bold text-center rounded-xl text-sm">Cédula no encontrada.</div>}
+                            {juvResult==="OTRO" && <div className="p-3 bg-yellow-50 text-yellow-700 font-bold text-center rounded-xl text-sm">Pertenece a otro distrito.</div>}
+                            {juvResult && juvResult!=="NO" && juvResult!=="OTRO" && (
+                                <div className="border-2 border-yellow-200 bg-yellow-50 rounded-2xl p-3">
+                                    <div className="font-black uppercase">{juvResult.nombre} {juvResult.apellido}</div>
+                                    <div className="text-[11px] font-bold text-slate-500 mb-2">CI {juvResult.cedula} · Mesa {juvResult.mesa} · {juvResult.local}</div>
+                                    <select value={juvForm.jefe} onChange={e=>setJuvForm({...juvForm, jefe:e.target.value})} className="w-full p-2 border-2 rounded-lg font-bold text-sm mb-2 outline-none"><option value="">JEFE DE JUVENTUD (opcional)</option>{misJefes.map(j=><option key={j.cedula} value={j.nombre}>{j.nombre}</option>)}</select>
+                                    <div className="grid grid-cols-2 gap-2 mb-2"><input type="text" placeholder="Localidad" className="p-2 border-2 rounded-lg font-bold text-sm uppercase outline-none" value={juvForm.localidad} onChange={e=>setJuvForm({...juvForm, localidad:e.target.value.toUpperCase()})}/><input type="text" placeholder="Teléfono" className="p-2 border-2 border-blue-200 rounded-lg font-bold text-sm outline-none" value={juvForm.telefono} onChange={e=>setJuvForm({...juvForm, telefono:e.target.value})}/></div>
+                                    <button onClick={guardarJuventud} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2.5 rounded-xl font-black">+ AGREGAR A JUVENTUD</button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black text-sm uppercase text-slate-700 mb-3">Lista de juventud ({juventudMios.length})</h3>
+                            {(() => {
+                                const grupos = {}; juventudMios.forEach(v=>{ const j=v.jefeJuventud||'SIN JEFE'; (grupos[j]=grupos[j]||[]).push(v); });
+                                const arr = Object.entries(grupos).sort((a,b)=>b[1].length-a[1].length);
+                                if (!arr.length) return <div className="text-center text-gray-400 font-bold p-6 border-2 border-dashed rounded-xl">Todavía no cargaste jóvenes.</div>;
+                                return arr.map(([jefe, vs2])=>(
+                                    <div key={jefe} className="mb-3">
+                                        <div className="flex justify-between items-center bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-1.5 mb-1"><span className="font-black text-xs uppercase">⭐ {jefe}</span><span className="font-black text-yellow-700 text-sm">{vs2.length}</span></div>
+                                        <div className="space-y-1">{vs2.map(v=>(<div key={v.id} className="flex items-center justify-between bg-slate-50 border rounded-lg px-2 py-1.5"><div className="min-w-0"><div className="font-black text-xs uppercase truncate">{v.nombre} {v.apellido}</div><div className="text-[9px] font-bold text-slate-400 truncate">CI {v.cedula} · M{v.mesa}{v.localidad?` · ${v.localidad}`:''}{v.telefono?` · 📞 ${v.telefono}`:''}</div></div><button onClick={()=>quitarJuventud(v)} className="text-red-400 hover:text-red-600 shrink-0 ml-2"><X size={16}/></button></div>))}</div>
+                                    </div>
+                                ));
+                            })()}
+                        </div>
+                    </div>
+                )}
+
                 {tab === "carga_link" && (
                     <div className="animate-fade-in max-w-2xl mx-auto space-y-5">
                         <div className="bg-white p-5 rounded-3xl shadow border">

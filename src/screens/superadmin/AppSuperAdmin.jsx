@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { ref, push, onValue, set, remove, update } from "firebase/database";
 import { signOut } from "firebase/auth";
-import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, Menu, X, PieChart } from "lucide-react";
+import { Search, Save, Users, CheckCircle, LogOut, BarChart3, MapPin, UserSquare2, Bell, AlertTriangle, Trash2, Printer, Lock, Send, IdCard, Target, Settings, Download, Wifi, WifiOff, FileSearch, RefreshCw, Calculator, TrendingUp, TrendingDown, Globe, Edit2, UserPlus, Menu, X, PieChart, Star } from "lucide-react";
 import { auth } from "../../firebase";
 import { DISTRITOS_CONCEPCION, NOMBRE_DEPARTAMENTO, FOTOS_LOCALES_CONCEJALES, INSTITUCIONES } from "../../constants";
 import { generarLlave, generarLlaveMesa } from "../../lib/llaves";
@@ -100,6 +100,31 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
             .filter(x => x.concejales.length > 1)
             .sort((a, b) => b.concejales.length - a.concejales.length);
     }, [votosFiltrados]);
+
+    // ── JUVENTUD (vista del adm local) ──
+    const [jefesJuvGlobal, setJefesJuvGlobal] = useState({});
+    useEffect(() => {
+        if (distritoFiltroMaster === "TODOS") { setJefesJuvGlobal({}); return; }
+        const un = onValue(ref(db, `jefes_juventud/${distritoFiltroMaster}`), snap => setJefesJuvGlobal(snap.val() || {}));
+        return () => un();
+    }, [db, distritoFiltroMaster]);
+    const jefesJuvLista = useMemo(() => {
+        const out = [];
+        Object.values(jefesJuvGlobal || {}).forEach(porC => Object.values(porC || {}).forEach(j => { if (j && j.nombre) out.push(j); }));
+        return out.sort((a, b) => (a.concejal || '').localeCompare(b.concejal || ''));
+    }, [jefesJuvGlobal]);
+    const juventudVotos = useMemo(() => (votosFiltrados || []).filter(v => v.juventud), [votosFiltrados]);
+    const juventudTotalUnicos = useMemo(() => new Set(juventudVotos.map(v => String(v.cedula))).size, [juventudVotos]);
+    const juventudPorConcejal = useMemo(() => {
+        const m = {};
+        juventudVotos.forEach(v => { const cj = v.concejal || 'SIN ASIGNAR'; (m[cj] = m[cj] || new Set()).add(String(v.cedula)); });
+        return Object.entries(m).map(([cj, s]) => ({ concejal: cj.includes(' - ') ? cj.split(' - ')[1].trim() : cj, n: s.size })).sort((a, b) => b.n - a.n);
+    }, [juventudVotos]);
+    const juventudChoques = useMemo(() => {
+        const m = {};
+        juventudVotos.forEach(v => { const c = String(v.cedula); (m[c] = m[c] || []).push(v); });
+        return Object.values(m).filter(arr => new Set(arr.map(v => normalizarNombre(v.concejal || ''))).size > 1);
+    }, [juventudVotos]);
 
     const reporteConcejales = useMemo(() => {
         const hoy = new Date().toLocaleDateString();
@@ -650,6 +675,7 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                             { id:"auditoria", label:"AUDITORÍA", icon:AlertTriangle },
                             { id:"reportes", label:"REPORTES", icon:PieChart },
                             { id:"instituciones", label:"INSTITUCIONES", icon:IdCard },
+                            { id:"juventud", label:"JUVENTUD", icon:Star },
                             { id:"usuarios", label:"USUARIOS", icon:UserPlus },
                             { id:"config", label:"AJUSTES", icon:Settings },
                             ...(esMaster ? [{ id:"limpiar", label:"LIMPIAR DÍA D", icon:Trash2 }] : []),
@@ -1529,6 +1555,56 @@ export default function AppSuperAdmin({ perfil, padronGlobal, votosSeguros, yaVo
                                     {avanceDiario.filas.map(f=>{ const tot=f.counts.reduce((s,n)=>s+n,0); return (<tr key={f.nombre} className="hover:bg-slate-50"><td className="p-2 font-black uppercase sticky left-0 bg-white">{f.nombre}</td>{f.counts.map((n,i)=><td key={i} className={`p-2 text-center font-bold ${n>0?'text-slate-800':'text-slate-300'}`}>{n||'·'}</td>)}<td className="p-2 text-center font-black text-red-700">{tot}</td></tr>);})}
                                 </tbody>
                             </table>
+                            )}
+                        </div>
+                    </div>
+                    )
+                )}
+
+                {activeTab === "juventud" && (
+                    distritoFiltroMaster === "TODOS" ? (
+                        <div className="text-center p-10 bg-white rounded-2xl shadow border border-blue-200"><Globe size={64} className="mx-auto text-blue-400 mb-4"/><h2 className="text-2xl font-black text-slate-800">VISIÓN GLOBAL ACTIVA</h2><p className="font-bold text-gray-500 mt-2">Elegí un distrito para ver la juventud.</p></div>
+                    ) : (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-yellow-600">{juventudTotalUnicos}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">Jóvenes (únicos)</div></div>
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-slate-800">{jefesJuvLista.length}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">Jefes de juventud</div></div>
+                            <div className="bg-white p-4 rounded-2xl shadow border text-center"><div className="text-3xl font-black text-red-600">{juventudChoques.length}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-1">Choques</div></div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border overflow-x-auto">
+                            <h3 className="font-black uppercase text-slate-700 mb-4 flex items-center gap-2"><Star className="text-yellow-500"/> Jefes de juventud ({jefesJuvLista.length})</h3>
+                            <table className="w-full text-left text-sm min-w-[640px]">
+                                <thead className="bg-slate-800 text-white text-[10px] uppercase"><tr><th className="p-2">Jefe</th><th className="p-2">C.I</th><th className="p-2">Localidad</th><th className="p-2">Teléfono</th><th className="p-2">Concejal</th><th className="p-2 text-center">Jóvenes</th></tr></thead>
+                                <tbody className="divide-y">
+                                    {jefesJuvLista.map(j=>(<tr key={(j.concejal||'')+j.cedula} className="hover:bg-slate-50"><td className="p-2 font-black uppercase">{j.nombre}</td><td className="p-2">{j.cedula}</td><td className="p-2 uppercase">{j.localidad||'—'}</td><td className="p-2">{j.telefono||'—'}</td><td className="p-2 uppercase text-[11px]">{j.concejal && j.concejal.includes(' - ')?j.concejal.split(' - ')[1]:j.concejal}</td><td className="p-2 text-center font-black text-yellow-700">{juventudVotos.filter(v=>normalizarNombre(v.jefeJuventud||'')===normalizarNombre(j.nombre)).length}</td></tr>))}
+                                    {jefesJuvLista.length===0 && <tr><td colSpan="6" className="text-center text-gray-400 font-bold p-4">Aún no hay jefes de juventud.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black uppercase text-slate-700 mb-4">Juventud por concejal (equipo)</h3>
+                            <div className="space-y-2">
+                                {juventudPorConcejal.map(r=>{ const max=Math.max(1,...juventudPorConcejal.map(x=>x.n)); return (<div key={r.concejal}><div className="flex justify-between text-xs font-black mb-1"><span className="uppercase truncate">{r.concejal}</span><span>{r.n} / 100</span></div><div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-yellow-500 h-3" style={{width:`${r.n/max*100}%`}}></div></div></div>);})}
+                                {juventudPorConcejal.length===0 && <div className="text-center text-gray-400 font-bold p-4">Sin jóvenes cargados.</div>}
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-3xl shadow border">
+                            <h3 className="font-black uppercase text-red-600 mb-1 flex items-center gap-2"><AlertTriangle/> Choques de juventud ({juventudChoques.length})</h3>
+                            <p className="text-sm text-gray-600 mb-4 font-bold">El mismo joven cargado como juventud por 2+ concejales.</p>
+                            {juventudChoques.length===0 ? (
+                                <div className="bg-green-50 text-green-700 p-4 rounded-xl font-black text-center">✅ Sin choques de juventud.</div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {juventudChoques.map((grupo,idx)=>(
+                                        <div key={idx} className="border-2 border-red-200 rounded-xl p-3 bg-red-50/50">
+                                            <div className="flex justify-between items-center mb-2 gap-2"><div className="font-black uppercase text-slate-800 truncate">{grupo[0].nombre} {grupo[0].apellido}</div><span className="text-[11px] font-black text-red-700 bg-red-100 px-2 py-0.5 rounded shrink-0">CI {grupo[0].cedula}</span></div>
+                                            <div className="flex flex-wrap gap-2">{grupo.map(v=>(<span key={v.id} className="text-[11px] font-bold bg-white border rounded-lg px-2 py-1 uppercase">⭐ {v.concejal && v.concejal.includes(' - ')?v.concejal.split(' - ')[1]:(v.concejal||'SIN ASIGNAR')}</span>))}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </div>
